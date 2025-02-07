@@ -48,7 +48,7 @@ class Post(models.Model):
     ]
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts")
-    category = models.CharField(max_length=50)
+    category = models.CharField(max_length=50, default='게시판', null=True)
     subject = models.CharField(max_length=50, choices=SUBJECT_CHOICES, default="주제 선택 안 함")
     keyword = models.CharField(max_length=50, choices=KEYWORD_CHOICES,default="default")  # ✅ 자동 분류 필드
     title = models.CharField(max_length=100)
@@ -68,6 +68,10 @@ class Post(models.Model):
     is_read = models.BooleanField(default=False)  # 읽음 상태 필드 추가
 
     def save(self, *args, **kwargs):
+        # category가 None인 경우 기본값으로 '게시판'을 설정
+        if not self.category:
+            self.category = '게시판'
+
         """ subject 값에 따라 keyword 자동 설정 """
         keyword_mapping = {
             "엔터테인먼트/예술": ["문학·책", "영화", "미술·디자인", "공연·전시", "음악", "드라마", "스타·연예인", "만화·애니", "방송"],
