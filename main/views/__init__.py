@@ -2,6 +2,7 @@ from .signup import SignupView
 from .profile import ProfileDetailView,ProfilePublicView,ProfileUrlnameUpdateView
 from .login import LoginView
 from .logout import LogoutView
+from .account import PasswordUpdateView
 from .post import PostListView,PostCreateView,PostMyView,PostMyDetailView,PostMutualView,PostDetailView,PostManageView,DraftPostListView,DraftPostDetailView
 from .comment import CommentListView,CommentDetailView
 from .heart import ToggleHeartView, PostHeartUsersView,PostHeartCountView

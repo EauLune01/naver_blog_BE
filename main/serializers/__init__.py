@@ -7,3 +7,4 @@ from .commentHeart import CommentHeartSerializer
 from .neighbor import NeighborSerializer
 from .activity import ActivitySerializer
 from .news import NewsSerializer
+from .account import PasswordUpdateSerializer
