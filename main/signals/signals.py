@@ -1,8 +1,9 @@
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.conf import settings
 from main.models.profile import Profile
 from main.models.comment import Comment
+from main.models.post import Post
 
 
 # 🛠 새로운 사용자가 생성될 때 자동으로 Profile 생성
@@ -43,3 +44,17 @@ def update_comment_author_name(sender, instance, **kwargs):
 
         # ✅ 업데이트 후 기존 데이터 삭제
         del old_usernames[instance.pk]
+
+@receiver(post_save, sender=Comment)
+def update_comment_count_on_save(sender, instance, **kwargs):
+    """ ✅ 댓글이 추가될 때 comment_count 증가 """
+    post = instance.post
+    post.comment_count = Comment.objects.filter(post=post).count()
+    post.save(update_fields=["comment_count"])
+
+@receiver(post_delete, sender=Comment)
+def update_comment_count_on_delete(sender, instance, **kwargs):
+    """ ✅ 댓글이 삭제될 때 comment_count 감소 """
+    post = instance.post
+    post.comment_count = Comment.objects.filter(post=post).count()
+    post.save(update_fields=["comment_count"])

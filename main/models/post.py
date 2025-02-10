@@ -62,7 +62,8 @@ class Post(models.Model):
         default=False,  # 기본값은 False (임시 저장)
         verbose_name="작성 상태"
     )
-    like_count = models.PositiveIntegerField(default=0)  # ✅ 하트 개수 저장
+    like_count = models.PositiveIntegerField(default=0)  # 하트 개수 저장
+    comment_count = models.PositiveIntegerField(default=0) # 대댓글 개수 저장
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_read = models.BooleanField(default=False)  # 읽음 상태 필드 추가
