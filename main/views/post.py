@@ -1,5 +1,3 @@
-from pickle import FALSE
-
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
@@ -17,6 +15,7 @@ import shutil
 from rest_framework.exceptions import MethodNotAllowed, ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import now, timedelta
+from pickle import FALSE
 
 def to_boolean(value):
     """
@@ -327,7 +326,8 @@ class PostMutualView(ListAPIView):
         neighbor_ids = set(from_neighbors + to_neighbors)
         neighbor_ids.discard(user.id)
 
-        mutual_neighbor_posts = Q(visibility='mutual', author_id__in=neighbor_ids)
+        mutual_neighbor_posts = Q(author_id__in=neighbor_ids) & (Q(visibility='mutual') | Q(visibility='everyone'))
+
         one_week_ago = now() - timedelta(days=7)
 
         # ✅ 최근 1주일 이내 작성된 서로 이웃의 게시물만 반환
