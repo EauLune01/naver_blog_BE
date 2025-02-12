@@ -72,8 +72,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     # 프로필 이미지 유효성 검증
     def validate_user_pic(self, value):
         if value:
-            if value.size > 5 * 1024 * 1024:  # 5MB 크기 제한
-                raise serializers.ValidationError("프로필 사진은 5MB 이하의 파일만 업로드할 수 있습니다.")
+            if value.size > 10 * 1024 * 1024:  # 5MB 크기 제한
+                raise serializers.ValidationError("프로필 사진은 10MB 이하의 파일만 업로드할 수 있습니다.")
             if value.content_type not in ["image/jpeg", "image/png"]:
                 raise serializers.ValidationError("프로필 사진은 JPEG 또는 PNG 형식만 지원됩니다.")
         return value

@@ -484,8 +484,7 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               enum=['everyone', 'mutual', 'me'], required=False),
             openapi.Parameter('subject', openapi.IN_FORM, description='주제 (네이버 제공 소주제)', type=openapi.TYPE_STRING,
                               enum=[choice[0] for choice in Post.SUBJECT_CHOICES], required=False),
-            openapi.Parameter('is_complete', openapi.IN_FORM,
-                              description='작성 상태 (true: 작성 완료, false: 임시 저장 → 변경 가능, 단 true → false 변경 불가)',
+            openapi.Parameter('is_complete', openapi.IN_FORM, description='작성 상태 (true: 작성 완료, false: 임시 저장)',
                               type=openapi.TYPE_BOOLEAN, required=False),
             openapi.Parameter('update_texts', openapi.IN_FORM, description='수정할 텍스트 ID 목록 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
@@ -499,24 +498,21 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               required=False),
             openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)', type=openapi.TYPE_STRING,
                               required=False),
-            openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식 문자열)',
+            openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식 문자열)',
+            openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열 (새 이미지 업로드)', type=openapi.TYPE_ARRAY,
                               items=openapi.Items(type=openapi.TYPE_FILE), required=False),
-            openapi.Parameter('captions', openapi.IN_FORM,
-                              description='새로운 이미지의 캡션 배열 (JSON 형식)',
-                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), required=False),
-            openapi.Parameter('is_representative', openapi.IN_FORM,
-                              description='새로운 이미지의 대표 여부 배열 (JSON 형식)',
-                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_BOOLEAN), required=False),
-            openapi.Parameter('group_caption', openapi.IN_FORM, description='그룹별 이미지 캡션 설정 (ex: {"3": "새 캡션"})',
-                              type=openapi.TYPE_OBJECT, required=False),
-            openapi.Parameter('image_group_ids', openapi.IN_FORM, description='이미지가 속한 그룹을 나타내는 배열 (각 이미지마다 개별 입력)',
+            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('image_group_ids', openapi.IN_FORM, description='이미지가 속한 그룹 배열 (각 이미지마다 개별 입력)',
                               type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), required=False),
-            openapi.Parameter('group_representative', openapi.IN_FORM,
-                              description='대표 이미지 설정 (ex: {"3": true} → 3번 그룹 대표, 나머지는 False)',
+            openapi.Parameter('group_captions', openapi.IN_FORM, description='그룹별 이미지 캡션 설정 (ex: {"3": "새 캡션"})',
+                              type=openapi.TYPE_OBJECT, required=False),
+            openapi.Parameter('group_representative', openapi.IN_FORM, description='대표 이미지 설정 (ex: {"3": true})',
                               type=openapi.TYPE_OBJECT, required=False),
         ],
         responses={200: PostSerializer()},
@@ -539,7 +535,6 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
 
         instance.save()
 
-        # JSON 데이터 파싱 함수
         def parse_json_data(field):
             value = request.data.get(field)
             if isinstance(value, str):
@@ -550,7 +545,7 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
             elif isinstance(value, list):
                 return value
             elif isinstance(value, int):
-                return [value]
+                return [value]  # 정수값을 리스트로 변환하여 처리
             return []
 
         # 텍스트 수정 / 삭제 처리
@@ -594,41 +589,35 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
         image_group_ids = [int(x) for x in image_group_ids] if image_group_ids else []
 
         # ✅ 이미지 관련 데이터 처리
-        images = request.FILES.getlist('images')  # 새로 업로드된 이미지 파일 리스트
-        captions = parse_json_data('captions')  # 캡션 배열
-        # ✅ Boolean 값이 아니라 리스트로 변환
+        images = request.FILES.getlist('images')
+        captions = parse_json_data('captions')
         is_representative_flags = parse_json_data('is_representative')
-        if isinstance(is_representative_flags, bool):
-            is_representative_flags = [is_representative_flags]  # 리스트로 변환
-        elif not isinstance(is_representative_flags, list):
-            is_representative_flags = []  # 기본값 설정
+        image_group_ids = parse_json_data('image_group_ids')
+        remove_images = parse_json_data('remove_images')
+        update_images = parse_json_data('update_images')
+        group_captions = parse_json_data('group_captions')
+        group_representative = parse_json_data('group_representative')
 
-        remove_images = parse_json_data('remove_images')  # 삭제할 이미지 ID 배열
-        update_images = parse_json_data('update_images')  # 기존 이미지 ID 리스트
-        group_captions = parse_json_data('group_captions')  # 그룹별 캡션 저장
-        group_representative = parse_json_data('group_representative')  # 그룹별 대표 이미지 설정
-
-        # ✅ 기존 이미지 삭제 (완전히 제거됨)
-        if remove_images:
-            print(f"🛠️ DEBUG - remove_images: {remove_images} (type: {type(remove_images)})")
-            PostImage.objects.filter(id__in=remove_images, post=instance).delete()
-
-        # ✅ 기존 이미지 수정 (ID 유지, 이미지 교체만 가능)
+        PostImage.objects.filter(id__in=remove_images, post=instance).delete()
         for idx, image_id in enumerate(update_images):
             try:
                 post_image = PostImage.objects.get(id=image_id, post=instance)
                 if idx < len(images):
-                    post_image.image.delete()  # 기존 이미지 삭제
-                    post_image.image = images[idx]  # 새로운 이미지 저장
+                    post_image.image.delete()
+                    post_image.image = images[idx]
                     post_image.save(update_fields=["image"])
             except PostImage.DoesNotExist:
                 continue
 
-        # ✅ 새 이미지 추가 (기존 그룹 유지)
-        created_images = []
+        # ✅ image_group_ids가 리스트가 아닐 경우 변환
+        image_group_ids = parse_json_data('image_group_ids')
+        if not isinstance(image_group_ids, list):
+            image_group_ids = [image_group_ids]  # 단일 정수 값이라면 리스트로 변환
 
+        # ✅ group_id 할당 수정 (빈 리스트일 경우 기본값 1)
+        created_images = []
         for idx, image in enumerate(images[len(update_images):]):
-            group_id = image_group_ids[idx] if idx < len(image_group_ids) else 1  # 기본 그룹 ID 설정
+            group_id = image_group_ids[idx] if image_group_ids and idx < len(image_group_ids) else 1
             caption = captions[idx] if idx < len(captions) else None
             is_representative = is_representative_flags[idx] if idx < len(is_representative_flags) else False
 
@@ -636,33 +625,19 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                 post=instance,
                 image=image,
                 image_group_id=group_id,
-                caption=caption,  # ✅ 새로운 이미지에 캡션 적용
-                is_representative=is_representative  # ✅ 새로운 이미지에 대표 여부 적용
+                caption=caption,
+                is_representative=is_representative
             )
             created_images.append(post_image)
 
-        # ✅ 모든 이미지에 대해 캡션 적용 (기존 및 신규 이미지 포함)
         for group_id, caption in group_captions.items():
             PostImage.objects.filter(post=instance, image_group_id=group_id).update(caption=caption)
 
-        # ✅ 특정 그룹을 대표로 설정하면 나머지 그룹은 자동으로 False 처리
         if group_representative:
-            selected_group = list(group_representative.keys())[0]  # 대표로 설정된 그룹 가져오기
-            PostImage.objects.filter(post=instance).update(is_representative=False)  # 모든 그룹 False로 변경
-            PostImage.objects.filter(post=instance, image_group_id=selected_group).update(
-                is_representative=True)  # 선택한 그룹만 True
+            selected_group = list(group_representative.keys())[0]
+            PostImage.objects.filter(post=instance).update(is_representative=False)
+            PostImage.objects.filter(post=instance, image_group_id=selected_group).update(is_representative=True)
 
-        # ✅ 대표 이미지 중복 검사 및 자동 설정
-        representative_images = instance.images.filter(is_representative=True)
-        if representative_images.count() > 1:
-            return Response({"error": "대표 이미지는 한 개만 설정할 수 있습니다."}, status=400)
-
-        if representative_images.count() == 0 and instance.images.exists():
-            first_image = instance.images.first()
-            first_image.is_representative = True
-            first_image.save(update_fields=["is_representative"])
-
-        # ✅ 응답 반환
         serializer = PostSerializer(instance)
         return Response(serializer.data, status=200)
 
