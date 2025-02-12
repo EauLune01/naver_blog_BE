@@ -117,9 +117,10 @@ class PostListView(ListAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
 class PostCreateView(CreateAPIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]  # ✅ POST 요청에서 multipart/form-data 처리
+    parser_classes = [MultiPartParser, FormParser]
     serializer_class = PostSerializer
 
     @swagger_auto_schema(
@@ -127,37 +128,48 @@ class PostCreateView(CreateAPIView):
         operation_description="게시물을 생성할 때 JSON 데이터와 이미지를 함께 업로드할 수 있습니다.",
         manual_parameters=[
             openapi.Parameter('title', openapi.IN_FORM, description='게시물 제목', type=openapi.TYPE_STRING, required=True),
-            openapi.Parameter('category', openapi.IN_FORM, description='카테고리', type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('subject', openapi.IN_FORM, description='주제 (네이버 제공 소주제)', type=openapi.TYPE_STRING, enum=[choice[0] for choice in Post.SUBJECT_CHOICES], required=False),
-            openapi.Parameter('visibility', openapi.IN_FORM, description='공개 범위', type=openapi.TYPE_STRING, enum=['everyone', 'mutual', 'me'], required=False),
-            openapi.Parameter('is_complete', openapi.IN_FORM, description='작성 상태', type=openapi.TYPE_BOOLEAN, enum=['true', 'false'], required=False),
-            openapi.Parameter('texts', openapi.IN_FORM, description='텍스트 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('fonts', openapi.IN_FORM, description='글씨체 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('category', openapi.IN_FORM, description='카테고리', type=openapi.TYPE_STRING,
+                              required=False),
+            openapi.Parameter('subject', openapi.IN_FORM, description='주제 (네이버 제공 소주제)', type=openapi.TYPE_STRING,
+                              enum=[choice[0] for choice in Post.SUBJECT_CHOICES], required=False),
+            openapi.Parameter('visibility', openapi.IN_FORM, description='공개 범위', type=openapi.TYPE_STRING,
+                              enum=['everyone', 'mutual', 'me'], required=False),
+            openapi.Parameter('is_complete', openapi.IN_FORM, description='작성 상태', type=openapi.TYPE_BOOLEAN,
+                              enum=['true', 'false'], required=False),
+            openapi.Parameter('texts', openapi.IN_FORM, description='텍스트 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING,
+                              required=False),
+            openapi.Parameter('fonts', openapi.IN_FORM, description='글씨체 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING,
+                              required=False),
             openapi.Parameter('font_sizes', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('is_bolds', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열', type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_FILE), required=False),
-            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열', type=openapi.TYPE_ARRAY,
+                              items=openapi.Items(type=openapi.TYPE_FILE), required=False),
+            openapi.Parameter('image_group_ids', openapi.IN_FORM, description='이미지가 속한 그룹을 나타내는 배열 (각 이미지마다 개별 입력)',
+                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), required=False),
+            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)',
+                              type=openapi.TYPE_STRING, required=False),
         ],
         responses={201: PostSerializer()},
     )
     def post(self, request, *args, **kwargs):
+        def parse_json_field(field):
+            """ JSON 문자열을 리스트로 변환 """
+            if field:
+                try:
+                    return json.loads(field)
+                except json.JSONDecodeError:
+                    return []
+            return []
+
         title = request.data.get('title')
         category = request.data.get('category')
         subject = request.data.get('subject', '주제 선택 안 함')
         visibility = request.data.get('visibility', 'everyone')
-        is_complete = to_boolean(request.data.get('is_complete', False))
-
-        # JSON 문자열을 리스트로 변환하는 함수
-        def parse_json_field(field):
-            if field:
-                try:
-                    return json.loads(field)  # ✅ JSON 문자열을 리스트로 변환
-                except json.JSONDecodeError:
-                    return []
-            return []
+        is_complete = request.data.get('is_complete', False) in ['true', True]
 
         texts = parse_json_field(request.data.get('texts'))
         fonts = parse_json_field(request.data.get('fonts'))
@@ -165,10 +177,25 @@ class PostCreateView(CreateAPIView):
         is_bolds = parse_json_field(request.data.get('is_bolds'))
         captions = parse_json_field(request.data.get('captions'))
         is_representative_flags = parse_json_field(request.data.get('is_representative'))
-        images = request.FILES.getlist('images', [])
 
-        if not title:  # title만 필수 항목으로 유지
-            return Response({"error": "title은 필수 항목입니다."}, status=400)
+        images = request.FILES.getlist('images')  # 이미지 리스트
+
+        image_group_ids = request.data.getlist('image_group_ids')  # 리스트로 직접 받음
+
+        # ✅ 쉼표로 구분된 문자열이면 리스트로 변환
+        if len(image_group_ids) == 1 and isinstance(image_group_ids[0], str) and "," in image_group_ids[0]:
+            image_group_ids = image_group_ids[0].split(",")
+
+        # ✅ 정수 리스트로 변환
+        image_group_ids = [int(x) for x in image_group_ids] if image_group_ids else []
+
+        # ✅ 대표 이미지 체크 (True가 2개 이상이면 에러 발생)
+        if is_representative_flags.count(True) > 1:
+            return Response({"error": "대표 이미지는 한 개만 설정할 수 있습니다."}, status=400)
+
+        # ✅ 모든 그룹이 False일 경우 첫 번째 그룹을 대표로 설정
+        if is_representative_flags.count(True) == 0 and len(is_representative_flags) > 0:
+            is_representative_flags[0] = True  # 첫 번째 그룹을 대표로 설정
 
         post = Post.objects.create(
             author=request.user,
@@ -179,36 +206,52 @@ class PostCreateView(CreateAPIView):
             is_complete=is_complete
         )
 
-        # 텍스트 저장 (글씨체, 크기, 굵기 포함)
+        # ✅ 텍스트 저장 (글씨체, 크기, 굵기 포함)
         for idx, text in enumerate(texts):
             font = fonts[idx] if idx < len(fonts) else "nanum_gothic"
             font_size = font_sizes[idx] if idx < len(font_sizes) else 15
             is_bold = is_bolds[idx] if idx < len(is_bolds) else False
             PostText.objects.create(post=post, content=text, font=font, font_size=font_size, is_bold=is_bold)
 
-        # 이미지 저장
+        # ✅ 이미지 그룹 저장
         created_images = []
-        for idx, image in enumerate(images):
+        group_caption_map = {}  # 그룹별 caption 저장
+        group_representative_map = {}  # 그룹별 대표 이미지 설정
+
+        for idx, img in enumerate(images):
+            group_id = image_group_ids[idx] if idx < len(image_group_ids) else 1  # 그룹 ID 할당
             caption = captions[idx] if idx < len(captions) else None
             is_representative = is_representative_flags[idx] if idx < len(is_representative_flags) else False
+
+            # ✅ 같은 그룹이면 첫 번째 등장하는 caption과 is_representative 값을 저장
+            if group_id not in group_caption_map:
+                group_caption_map[group_id] = caption
+                group_representative_map[group_id] = is_representative  # ✅ 대표 여부도 그룹 내 동일하게 설정
+
             post_image = PostImage.objects.create(
                 post=post,
-                image=image,
-                caption=caption,
-                is_representative=is_representative
+                image=img,
+                caption=group_caption_map[group_id],  # ✅ 그룹 내 동일한 caption 적용
+                is_representative=group_representative_map[group_id],  # ✅ 그룹 내 동일한 대표 여부 적용
+                image_group_id=group_id  # 그룹 ID 설정
             )
             created_images.append(post_image)
 
-        if not any(img.is_representative for img in created_images) and created_images:
+        # ✅ 대표 이미지 체크 (True가 2개 이상이면 에러 발생)
+        if is_representative_flags.count(True) > 1:
+            return Response({"error": "대표 이미지는 한 개만 설정할 수 있습니다."}, status=400)
+
+        # ✅ 최종적으로 대표 이미지가 하나도 없으면 첫 번째 그룹의 첫 번째 이미지를 대표로 설정
+        if not any(img.is_representative for img in created_images):
             created_images[0].is_representative = True
             created_images[0].save()
 
-
         serializer = PostSerializer(post)
-        if is_complete:
-            return Response({"message": "게시물이 성공적으로 생성되었습니다.", "post": serializer.data}, status=201)
-        else:
-            return Response({"message": "게시물이 임시 저장되었습니다.", "post": serializer.data}, status=201)
+        return Response(
+            {"message": "게시물이 성공적으로 생성되었습니다." if is_complete else "게시물이 임시 저장되었습니다.", "post": serializer.data},
+            status=201
+        )
+
 
 class PostMyView(ListAPIView):
     """
@@ -261,6 +304,30 @@ class PostMyView(ListAPIView):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class PostMyCurrentView(ListAPIView):
+    """
+    로그인된 유저가 작성한 최신 5개 게시물 목록을 조회하는 API
+    ✅ 로그인된 유저가 작성한 게시물 중 is_complete=True인 게시물만 조회
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # ✅ is_complete=True 조건 추가
+        return Post.objects.filter(author=user, is_complete=True).order_by('-created_at')[:5]
+
+    @swagger_auto_schema(
+        operation_summary="내가 작성한 최근 5개 게시물 조회",
+        operation_description="로그인된 유저가 작성한 게시물 중 is_complete=True인 상태에서 최근 5개만 반환합니다.",
+        responses={200: PostSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class PostMyDetailView(RetrieveAPIView):
     """
@@ -426,60 +493,67 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('content', openapi.IN_FORM, description='수정할 텍스트 내용 배열 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('font', openapi.IN_FORM, description='글씨체 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('font_size', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('font', openapi.IN_FORM, description='글씨체 배열 (JSON 형식)', type=openapi.TYPE_STRING,
+                              required=False),
+            openapi.Parameter('font_size', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식)', type=openapi.TYPE_STRING,
+                              required=False),
+            openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)', type=openapi.TYPE_STRING,
+                              required=False),
             openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열 (새 이미지 업로드)', type=openapi.TYPE_ARRAY,
                               items=openapi.Items(type=openapi.TYPE_FILE), required=False),
-            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('captions', openapi.IN_FORM,
+                              description='새로운 이미지의 캡션 배열 (JSON 형식)',
+                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_STRING), required=False),
+            openapi.Parameter('is_representative', openapi.IN_FORM,
+                              description='새로운 이미지의 대표 여부 배열 (JSON 형식)',
+                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_BOOLEAN), required=False),
+            openapi.Parameter('group_caption', openapi.IN_FORM, description='그룹별 이미지 캡션 설정 (ex: {"3": "새 캡션"})',
+                              type=openapi.TYPE_OBJECT, required=False),
+            openapi.Parameter('image_group_ids', openapi.IN_FORM, description='이미지가 속한 그룹을 나타내는 배열 (각 이미지마다 개별 입력)',
+                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), required=False),
+            openapi.Parameter('group_representative', openapi.IN_FORM,
+                              description='대표 이미지 설정 (ex: {"3": true} → 3번 그룹 대표, 나머지는 False)',
+                              type=openapi.TYPE_OBJECT, required=False),
         ],
         responses={200: PostSerializer()},
     )
     def patch(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # ✅ subject 값 검증은 serializer에서 처리되므로 별도 검증 X
-        instance.subject = request.data.get('subject', instance.subject)
-
-        # ✅ `is_complete=True`인 게시물은 `False`로 변경할 수 없음
-        if "is_complete" in request.data:
-            new_is_complete = to_boolean(request.data["is_complete"])  # 🔥 Boolean 변환 적용
-            if instance.is_complete and not new_is_complete:
-                return Response({"error": "작성 완료된 게시물은 다시 임시 저장 상태로 변경할 수 없습니다."}, status=400)
-            instance.is_complete = new_is_complete  # ✅ Boolean 값 저장)
-
-        # ✅ visibility 검증도 serializer에서 자동으로 처리됨 → 별도 검증 삭제
-        instance.visibility = request.data.get('visibility', instance.visibility)
-
-        # ✅ 기본 필드 업데이트
+        # 기본 필드 업데이트
         instance.title = request.data.get('title', instance.title)
         instance.category = request.data.get('category', instance.category)
+        instance.visibility = request.data.get('visibility', instance.visibility)
+        instance.subject = request.data.get('subject', instance.subject)
+
+        # is_complete 필드 업데이트
+        if "is_complete" in request.data:
+            new_is_complete = to_boolean(request.data["is_complete"])
+            if instance.is_complete and not new_is_complete:
+                return Response({"error": "작성 완료된 게시물은 다시 임시 저장 상태로 변경할 수 없습니다."}, status=400)
+            instance.is_complete = new_is_complete
+
         instance.save()
 
-        # ✅ JSON 데이터 파싱 함수 (모든 JSON 필드를 안전하게 처리)
+        # JSON 데이터 파싱 함수
         def parse_json_data(field):
-            try:
-                if isinstance(request.data, list):  # 🔥 리스트 자체가 들어왔을 때
-                    return request.data
-                elif isinstance(request.data.get(field), str):  # 기존 방식 (필드가 JSON 문자열일 때)
-                    return json.loads(request.data.get(field, "[]"))
-                elif isinstance(request.data.get(field), list):  # `field` 필드가 리스트일 때
-                    return request.data.get(field, [])
-                return []
-            except json.JSONDecodeError:
-                return []
+            value = request.data.get(field)
+            if isinstance(value, str):
+                try:
+                    return json.loads(value.replace(" ", "")) if value else []
+                except json.JSONDecodeError:
+                    return []
+            elif isinstance(value, list):
+                return value
+            elif isinstance(value, int):
+                return [value]
+            return []
 
-        # ✅ 텍스트 수정 / 삭제
+        # 텍스트 수정 / 삭제 처리
         update_text_ids = parse_json_data('update_texts')
         remove_text_ids = parse_json_data('remove_texts')
         updated_contents = parse_json_data('content')
@@ -494,70 +568,89 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
         for idx, text_id in enumerate(update_text_ids):
             try:
                 text_obj = PostText.objects.get(id=text_id, post=instance)
-
-                if idx < len(updated_contents):
-                    text_obj.content = updated_contents[idx]
-                if idx < len(updated_fonts):
-                    text_obj.font = updated_fonts[idx]
-                if idx < len(updated_font_sizes):
-                    text_obj.font_size = updated_font_sizes[idx]
-                if idx < len(updated_is_bolds):
-                    text_obj.is_bold = updated_is_bolds[idx]
-
+                if idx < len(updated_contents): text_obj.content = updated_contents[idx]
+                if idx < len(updated_fonts): text_obj.font = updated_fonts[idx]
+                if idx < len(updated_font_sizes): text_obj.font_size = updated_font_sizes[idx]
+                if idx < len(updated_is_bolds): text_obj.is_bold = updated_is_bolds[idx]
                 text_obj.save()
             except PostText.DoesNotExist:
                 continue
-        # ✅ 새 텍스트 추가 (remove_texts와 update_texts가 비어있다면)
+
+        # 새 텍스트 추가
         if not remove_text_ids and not update_text_ids:
             for idx in range(len(updated_contents)):
                 PostText.objects.create(
                     post=instance,
-                    content=updated_contents[idx],  # 필수
-                    font=updated_fonts[idx] if idx < len(updated_fonts) else "nanum_gothic",  # 기본값: 나눔고딕
-                    font_size=updated_font_sizes[idx] if idx < len(updated_font_sizes) else 15,  # 기본값: 15
-                    is_bold=updated_is_bolds[idx] if idx < len(updated_is_bolds) else False,  # 기본값: False
+                    content=updated_contents[idx],
+                    font=updated_fonts[idx] if idx < len(updated_fonts) else "nanum_gothic",
+                    font_size=updated_font_sizes[idx] if idx < len(updated_font_sizes) else 15,
+                    is_bold=updated_is_bolds[idx] if idx < len(updated_is_bolds) else False,
                 )
 
-        # ✅ 이미지 관련 데이터 가져오기
+        # ✅ Swagger에서 숫자로 하나씩 추가하는 방식 반영 (post 메서드와 동일하게)
+        image_group_ids = request.data.getlist('image_group_ids')  # 리스트로 직접 받음
+        if len(image_group_ids) == 1 and isinstance(image_group_ids[0], str) and "," in image_group_ids[0]:
+            image_group_ids = image_group_ids[0].split(",")
+        image_group_ids = [int(x) for x in image_group_ids] if image_group_ids else []
+
+        # ✅ 이미지 관련 데이터 처리
         images = request.FILES.getlist('images')  # 새로 업로드된 이미지 파일 리스트
-        captions = parse_json_data('captions')  # 캡션 배열 (id 없음)
-        is_representative_flags = parse_json_data('is_representative')  # 대표 여부 배열 (id 없음)
+        captions = parse_json_data('captions')  # 캡션 배열
+        # ✅ Boolean 값이 아니라 리스트로 변환
+        is_representative_flags = parse_json_data('is_representative')
+        if isinstance(is_representative_flags, bool):
+            is_representative_flags = [is_representative_flags]  # 리스트로 변환
+        elif not isinstance(is_representative_flags, list):
+            is_representative_flags = []  # 기본값 설정
+
         remove_images = parse_json_data('remove_images')  # 삭제할 이미지 ID 배열
         update_images = parse_json_data('update_images')  # 기존 이미지 ID 리스트
+        group_captions = parse_json_data('group_captions')  # 그룹별 캡션 저장
+        group_representative = parse_json_data('group_representative')  # 그룹별 대표 이미지 설정
 
-        # ✅ 기존 이미지 삭제
-        PostImage.objects.filter(id__in=remove_images, post=instance).delete()
+        # ✅ 기존 이미지 삭제 (완전히 제거됨)
+        if remove_images:
+            print(f"🛠️ DEBUG - remove_images: {remove_images} (type: {type(remove_images)})")
+            PostImage.objects.filter(id__in=remove_images, post=instance).delete()
 
-        # ✅ 기존 이미지 수정 (ID 유지) - 업로드된 파일과 ID 매칭
+        # ✅ 기존 이미지 수정 (ID 유지, 이미지 교체만 가능)
         for idx, image_id in enumerate(update_images):
             try:
                 post_image = PostImage.objects.get(id=image_id, post=instance)
-
-                # ✅ 새로 업로드된 이미지가 있다면 교체
                 if idx < len(images):
                     post_image.image.delete()  # 기존 이미지 삭제
                     post_image.image = images[idx]  # 새로운 이미지 저장
-
-                # ✅ captions 리스트의 idx가 유효하다면 업데이트
-                if idx < len(captions):
-                    post_image.caption = captions[idx]
-
-                # ✅ is_representative 값도 업데이트
-                if idx < len(is_representative_flags):
-                    post_image.is_representative = is_representative_flags[idx]
-
-                post_image.save()
+                    post_image.save(update_fields=["image"])
             except PostImage.DoesNotExist:
-                continue  # 존재하지 않으면 무시
+                continue
 
-        # ✅ 새 이미지 추가 (ID가 새로 생성됨)
-        for idx, image in enumerate(images[len(update_images):]):  # 기존 이미지 수정 후 남은 파일들
-            PostImage.objects.create(
+        # ✅ 새 이미지 추가 (기존 그룹 유지)
+        created_images = []
+
+        for idx, image in enumerate(images[len(update_images):]):
+            group_id = image_group_ids[idx] if idx < len(image_group_ids) else 1  # 기본 그룹 ID 설정
+            caption = captions[idx] if idx < len(captions) else None
+            is_representative = is_representative_flags[idx] if idx < len(is_representative_flags) else False
+
+            post_image = PostImage.objects.create(
                 post=instance,
                 image=image,
-                caption=captions[idx] if idx < len(captions) else None,
-                is_representative=is_representative_flags[idx] if idx < len(is_representative_flags) else False,
+                image_group_id=group_id,
+                caption=caption,  # ✅ 새로운 이미지에 캡션 적용
+                is_representative=is_representative  # ✅ 새로운 이미지에 대표 여부 적용
             )
+            created_images.append(post_image)
+
+        # ✅ 모든 이미지에 대해 캡션 적용 (기존 및 신규 이미지 포함)
+        for group_id, caption in group_captions.items():
+            PostImage.objects.filter(post=instance, image_group_id=group_id).update(caption=caption)
+
+        # ✅ 특정 그룹을 대표로 설정하면 나머지 그룹은 자동으로 False 처리
+        if group_representative:
+            selected_group = list(group_representative.keys())[0]  # 대표로 설정된 그룹 가져오기
+            PostImage.objects.filter(post=instance).update(is_representative=False)  # 모든 그룹 False로 변경
+            PostImage.objects.filter(post=instance, image_group_id=selected_group).update(
+                is_representative=True)  # 선택한 그룹만 True
 
         # ✅ 대표 이미지 중복 검사 및 자동 설정
         representative_images = instance.images.filter(is_representative=True)
@@ -567,7 +660,7 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
         if representative_images.count() == 0 and instance.images.exists():
             first_image = instance.images.first()
             first_image.is_representative = True
-            first_image.save()
+            first_image.save(update_fields=["is_representative"])
 
         # ✅ 응답 반환
         serializer = PostSerializer(instance)

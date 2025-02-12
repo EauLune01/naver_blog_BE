@@ -15,6 +15,7 @@ class CustomUserManager(BaseUserManager):
         user.set_password(password) #비밀번호를 해싱
         user.save(using=self._db) #DB에 저장
         return user
+
     #관리자 계정 생성
     def create_superuser(self, id, password=None, **extra_fields):
         #강제로 관리자, 슈퍼유저 권한 부여

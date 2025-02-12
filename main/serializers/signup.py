@@ -20,11 +20,11 @@ class SignupSerializer(serializers.ModelSerializer):
 
         # ID 중복 검사
         if User.objects.filter(id=data['id']).exists():
-            errors["id"] = "아이디가 중복되었습니다."
+            errors["id"] = "아이디가 중복되었습니다. 다시 입력해주세요"
 
         # 비밀번호 확인 검사
         if data['password'] != data['password_confirm']:
-            errors["password"] = "비밀번호가 다릅니다."
+            errors["password"] = "비밀번호가 다릅니다. 다시 입력해주세요"
 
         if errors:
             raise serializers.ValidationError(errors)

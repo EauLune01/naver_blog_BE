@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+import os
 
 
 # ✅ 업로드 경로 처리 함수
@@ -42,12 +43,18 @@ class Profile(models.Model):
         """
         if self.pk:
             old_instance = Profile.objects.get(pk=self.pk)
+
+            # ✅ 기존 블로그 프로필 사진 삭제
             if old_instance.blog_pic and old_instance.blog_pic != self.blog_pic:
                 if old_instance.blog_pic.name != 'default/blog_default.jpg':
-                    old_instance.blog_pic.delete(save=False)
+                    if os.path.isfile(old_instance.blog_pic.path):
+                        os.remove(old_instance.blog_pic.path)
+
+            # ✅ 기존 사용자 프로필 사진 삭제
             if old_instance.user_pic and old_instance.user_pic != self.user_pic:
                 if old_instance.user_pic.name != 'default/user_default.jpg':
-                    old_instance.user_pic.delete(save=False)
+                    if os.path.isfile(old_instance.user_pic.path):
+                        os.remove(old_instance.user_pic.path)
 
         super().save(*args, **kwargs)
 

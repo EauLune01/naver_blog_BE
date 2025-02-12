@@ -14,7 +14,6 @@ def image_upload_path(instance, filename):
     return f"post_pics/{user_id}/{category}/{title}/{filename}"
 
 
-
 class Post(models.Model):
     VISIBILITY_CHOICES = [
         ('everyone', '전체 공개'),
@@ -50,7 +49,7 @@ class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts")
     category = models.CharField(max_length=50, default='게시판', null=True)
     subject = models.CharField(max_length=50, choices=SUBJECT_CHOICES, default="주제 선택 안 함")
-    keyword = models.CharField(max_length=50, choices=KEYWORD_CHOICES,default="default")  # ✅ 자동 분류 필드
+    keyword = models.CharField(max_length=50, choices=KEYWORD_CHOICES, default="default")  # ✅ 자동 분류 필드
     title = models.CharField(max_length=100)
     visibility = models.CharField(
         max_length=10,
@@ -63,7 +62,7 @@ class Post(models.Model):
         verbose_name="작성 상태"
     )
     like_count = models.PositiveIntegerField(default=0)  # 하트 개수 저장
-    comment_count = models.PositiveIntegerField(default=0) # 대댓글 개수 저장
+    comment_count = models.PositiveIntegerField(default=0)  # 대댓글 개수 저장
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_read = models.BooleanField(default=False)  # 읽음 상태 필드 추가
@@ -81,8 +80,7 @@ class Post(models.Model):
             "지식/동향": ["IT/컴퓨터", "사회/정치", "건강/의학", "비즈니스/경제", "어학/외국어", "교육/학문"],
             "default": ["주제 선택 안 함"],
         }
-        self.keyword = next((key for key, values in keyword_mapping.items() if self.subject in values),
-                                     "default")
+        self.keyword = next((key for key, values in keyword_mapping.items() if self.subject in values), "default")
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -101,7 +99,7 @@ class PostText(models.Model):
     FONT_SIZE_CHOICES = [11, 13, 15, 16, 19, 24, 28, 30, 34, 38]
 
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="texts")
-    content = models.TextField()
+    content = models.TextField(null=True, blank=True)  # 텍스트도 선택적
     font = models.CharField(max_length=25, choices=FONT_CHOICES, default='nanum_gothic')  # 기본값: 나눔고딕
     font_size = models.IntegerField(choices=[(size, f"{size}px") for size in FONT_SIZE_CHOICES], default=15)  # 기본값: 15
     is_bold = models.BooleanField(default=False)  # 기본값: False
@@ -111,9 +109,10 @@ class PostText(models.Model):
 
 class PostImage(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to=image_upload_path)
+    image = models.ImageField(upload_to=image_upload_path, null=True, blank=True)  # 이미지가 없어도 가능
     caption = models.CharField(max_length=255, blank=True, null=True)
     is_representative = models.BooleanField(default=False, verbose_name="대표 사진 여부")
+    image_group_id = models.PositiveIntegerField(default=1)  # 이미지 그룹 번호
 
     def __str__(self):
-        return f"Image for {self.post.title} (Representative: {self.is_representative})"
+        return f"Image for {self.post.title} (Group {self.image_group_id}, Representative: {self.is_representative})"

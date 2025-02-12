@@ -21,13 +21,12 @@ from django.conf.urls.static import static
 from main.views.signup import SignupView
 from main.views.login import LoginView
 from main.views.logout import LogoutView
-from main.views.account import PasswordUpdateView
 from main.views.profile import ProfileDetailView, ProfilePublicView, ProfileUrlnameUpdateView
-from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView
+from main.views.post import PostDetailView,PostMyView,PostMyCurrentView,PostMyDetailView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView
 from main.views.comment import CommentListView, CommentDetailView
 from main.views.heart import ToggleHeartView, PostHeartUsersView, PostHeartCountView
 from main.views.commentHeart import ToggleCommentHeartView, CommentHeartCountView
-from main.views.neighbor import NeighborView,NeighborAcceptView,NeighborRejectView,NeighborRequestListView,PublicNeighborListView
+from main.views.neighbor import NeighborView,NeighborAcceptView,NeighborRejectView,NeighborRequestListView,PublicNeighborListView, MyNeighborListView, MyNeighborDeleteView
 from main.views.news import MyNewsListView
 from main.views.activity import MyActivityListView
 from drf_yasg.views import get_schema_view
@@ -49,13 +48,14 @@ urlpatterns = [
 
     # ✅ 회원가입 API
     path('signup/', SignupView.as_view(), name='signup'),
-    # ✅ 로그인 및 로그아웃 관련 API
+    # ✅ 로그인 및 로그아웃 API
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    path('account/update-password/', PasswordUpdateView.as_view(), name='update-password'),
 
     # ✅ 내 프로필 관련 API
     path('profile/me/', ProfileDetailView.as_view(), name='profile-me'),  # 내 프로필 조회, 수정, 삭제
+    path("profile/me/neighbors/<str:neighbor_urlname>/", MyNeighborDeleteView.as_view(), name="my-neighbor-delete"),# 내 서로이웃 삭제
+    path("profile/me/neighbors/", MyNeighborListView.as_view(), name="my-neighbor-list"), # 내 서로이웃 목록 확인 (로그인한 사용자)
     path('profile/urlname/', ProfileUrlnameUpdateView.as_view(), name='profile-urlname-update'),  # urlname 변경 (한 번만 가능)
 
     # 내 소식 및 내 활동 관련 API
@@ -63,19 +63,20 @@ urlpatterns = [
     path('activity/list/', MyActivityListView.as_view(), name='my-activity-list'), # 내 활동
 
     # ✅ 타인 프로필 관련 API
-    path('profile/<str:user_id>/', ProfilePublicView.as_view(), name='profile-public'),
-    path('profile/<str:user_id>/neighbors/', PublicNeighborListView.as_view(), name='neighbor-list'),
+    path('profile/<str:urlname>/', ProfilePublicView.as_view(), name='profile-public'),
+    path('profile/<str:urlname>/neighbors/', PublicNeighborListView.as_view(), name='neighbor-list'),
 
     # ✅ 서로이웃 관련 API
-    path('neighbors/<str:to_user_id>/', NeighborView.as_view(), name='neighbor-request'),
+    path("neighbors/<str:to_urlname>/", NeighborView.as_view(), name="neighbor-request"),
     path('neighbors/requests/me', NeighborRequestListView.as_view(), name='neighbor-request-list'),
-    path('neighbors/accept/<str:from_user_id>/', NeighborAcceptView.as_view(), name='neighbor-accept'),
-    path('neighbors/reject/<str:from_user_id>/', NeighborRejectView.as_view(), name='neighbor-reject'),
+    path('neighbors/accept/<str:from_urlname>/', NeighborAcceptView.as_view(), name='neighbor-accept'),
+    path('neighbors/reject/<str:from_urlname>/', NeighborRejectView.as_view(), name='neighbor-reject'),
 
     # ✅ 게시물 관련 API
 
     # 내 게시물 관련 API
     path('posts/me/', PostMyView.as_view(), name='post-my-list'),  # 내가 작성한 게시물 목록 조회, 쿼리 파라미터 활용!
+    path('posts/me/current/', PostMyCurrentView.as_view(), name='post-my-current'), # 내가 작성한 게시물 목록 최신 5개 조회
     path('posts/me/<int:pk>/', PostMyDetailView.as_view(), name='post-my-detail'),  # 내가 작성한 게시물 상세 조회
     path('posts/me/create/', PostCreateView.as_view(), name='post-create'),  # 게시물 생성 (POST)
     path('posts/me/<int:pk>/manage/', PostManageView.as_view(), name='post-manage'),  # 게시물 수정/삭제 (PUT, PATCH, DELETE)
