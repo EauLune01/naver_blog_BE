@@ -4,6 +4,7 @@ from rest_framework.generics import RetrieveUpdateDestroyAPIView, UpdateAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -13,13 +14,6 @@ from ..models.profile import Profile
 from main.models.neighbor import Neighbor
 from ..serializers.profile import ProfileSerializer,UrlnameUpdateSerializer
 from django.db.models import Q
-from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
-from main.serializers.profile import UrlnameUpdateSerializer
-from main.models.profile import Profile
 from rest_framework.exceptions import ValidationError
 
 
@@ -89,6 +83,17 @@ class ProfileDetailView(RetrieveUpdateDestroyAPIView):
         serializer.save()
         return Response(serializer.data, status=200)
 
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.generics import UpdateAPIView
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from main.serializers.profile import UrlnameUpdateSerializer
+from main.models.profile import Profile
+
+from rest_framework.exceptions import ValidationError
 
 class ProfileUrlnameUpdateView(UpdateAPIView):
     """
