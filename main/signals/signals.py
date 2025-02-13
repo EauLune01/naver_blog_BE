@@ -4,7 +4,7 @@ from django.conf import settings
 from main.models.profile import Profile
 from main.models.comment import Comment
 from main.models.post import Post
-
+from main.models.category import Category
 
 # 🛠 새로운 사용자가 생성될 때 자동으로 Profile 생성
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -58,3 +58,4 @@ def update_comment_count_on_delete(sender, instance, **kwargs):
     post = instance.post
     post.comment_count = Comment.objects.filter(post=post).count()
     post.save(update_fields=["comment_count"])
+
