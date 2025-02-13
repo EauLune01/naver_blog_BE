@@ -1,74 +1,85 @@
 from rest_framework import serializers
-from main.models.post import Post, PostText, PostImage
-from main.models.heart import Heart  # ✅ 좋아요 모델 추가
-from main.models.comment import Comment  # ✅ 댓글 모델 추가
+from main.models.post import Post, PostImage
+from main.models.category import Category
+import re
 
-class PostTextSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PostText
-        fields = ['id', 'content', 'font', 'font_size', 'is_bold']
 
 class PostImageSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = PostImage
-        fields = ['id', 'image', 'caption', 'is_representative', 'image_group_id']
+        fields = ['id', 'image', 'image_url']
+
+    def get_image_url(self, obj):
+        return obj.image.url if obj.image else None
+
 
 class PostSerializer(serializers.ModelSerializer):
-    texts = PostTextSerializer(many=True, read_only=True)
-    images = PostImageSerializer(many=True, read_only=True)
     author_name = serializers.CharField(source='author.profile.username', read_only=True)
-    visibility = serializers.ChoiceField(choices=Post.VISIBILITY_CHOICES)
+    visibility = serializers.ChoiceField(choices=Post.VISIBILITY_CHOICES, required=False)
     keyword = serializers.CharField(read_only=True)
-    subject = serializers.ChoiceField(choices=Post.SUBJECT_CHOICES, default="주제 선택 안 함")
-
-    image_group_ids = serializers.SerializerMethodField()  # ✅ 그룹 ID 리스트 필드
-
+    subject = serializers.ChoiceField(choices=Post.SUBJECT_CHOICES, required=False, default="주제 선택 안 함")
     total_likes = serializers.IntegerField(source="like_count", read_only=True)
     total_comments = serializers.IntegerField(source="comment_count", read_only=True)
+    category_name = serializers.CharField(source="category.name", required=True)
+    images = PostImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
         fields = [
-            'id', 'author_name', 'title', 'category', 'subject', 'keyword', 'visibility',
-            'is_complete', 'texts', 'images', 'created_at', 'updated_at',
-            'total_likes', 'total_comments', 'image_group_ids'
+            'id', 'author_name', 'title', 'content', 'status', 'category_name', 'subject', 'keyword',
+            'visibility', 'images', 'created_at', 'updated_at', 'total_likes', 'total_comments'
         ]
-        read_only_fields = ['id', 'author_name', 'created_at', 'updated_at', 'keyword']
+        read_only_fields = ['id', 'author_name', 'created_at', 'updated_at', 'keyword', 'images']
 
-    def get_image_group_ids(self, obj):
-        """ 해당 게시물의 이미지 그룹 ID 목록 반환 """
-        return list(PostImage.objects.filter(post=obj).values_list('image_group_id', flat=True))
+    def extract_image_urls(self, content):
+        return re.findall(r'<img\\s+[^>]*src=["\']([^"\']+)["\']', content)
+
+    def validate_category_name(self, value):
+        if not Category.objects.filter(name=value).exists():
+            raise serializers.ValidationError(f"'{value}'은(는) 유효한 카테고리가 아닙니다.")
+        return value
 
     def create(self, validated_data):
-        """ 게시물과 이미지 저장 시, 이미지 그룹 ID를 함께 저장 """
-        request = self.context.get('request')
-        image_group_ids = request.data.getlist('image_group_ids')  # ✅ 리스트로 가져오기
-        image_group_ids = [int(x) for x in image_group_ids] if image_group_ids else []
-
+        category_name = validated_data.pop('category_name', '게시판')
+        category = Category.objects.get(name=self.validate_category_name(category_name))
+        validated_data['category'] = category
         post = Post.objects.create(**validated_data)
 
-        # ✅ PostImage 저장 시 그룹 ID 반영
-        for idx, image_data in enumerate(request.FILES.getlist('images')):
-            image_group_id = image_group_ids[idx] if idx < len(image_group_ids) else 1
-            PostImage.objects.create(post=post, image=image_data, image_group_id=image_group_id)
+        image_urls = self.extract_image_urls(post.content)
+        for url in image_urls:
+            PostImage.objects.create(post=post, image=url)
 
         return post
 
-    def validate_subject(self, value):
-        """ subject 값이 유효한지 검증하고 keyword 자동 설정 """
-        valid_subjects = [choice[0] for choice in Post.SUBJECT_CHOICES]
-        if value not in valid_subjects:
-            raise serializers.ValidationError(f"'{value}'은(는) 유효하지 않은 주제입니다.")
-        return value
+    def update(self, instance, validated_data):
+        instance.title = validated_data.get('title', instance.title)
+        instance.content = validated_data.get('content', instance.content)
+        instance.status = validated_data.get('status', instance.status)
 
-    def validate_visibility(self, value):
-        """ visibility 값이 유효한지 검증 """
-        valid_visibilities = [choice[0] for choice in Post.VISIBILITY_CHOICES]
-        if value not in valid_visibilities:
-            raise serializers.ValidationError(f"'{value}'은(는) 유효하지 않은 공개 범위 값입니다.")
-        return value
+        category_name = validated_data.get('category_name', instance.category.name)
+        if category_name:
+            category = Category.objects.get(name=self.validate_category_name(category_name))
+            instance.category = category
+
+        old_image_urls = set(self.extract_image_urls(instance.content))
+        new_image_urls = set(self.extract_image_urls(validated_data.get("content", instance.content)))
+
+        stored_images = PostImage.objects.filter(post=instance)
+        stored_image_urls = set(img.image for img in stored_images)
+
+        images_to_delete = stored_image_urls - new_image_urls
+        PostImage.objects.filter(post=instance, image__in=images_to_delete).delete()
+
+        images_to_add = new_image_urls - stored_image_urls
+        for url in images_to_add:
+            PostImage.objects.create(post=instance, image=url)
+
+        instance.save()
+        return instance
+
+
 
 
 

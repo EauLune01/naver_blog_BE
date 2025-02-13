@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import Post, PostText, PostImage  # 🔹 PostImage 추가
+from ..models import Post, PostImage  # 🔹 PostImage 추가
 
 
 class PostSearchSerializer(serializers.ModelSerializer):

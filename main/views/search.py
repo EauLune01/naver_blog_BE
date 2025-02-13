@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from ..models.post import Post, PostText, PostImage  # 🔹 PostImage 추가
+from ..models.post import Post, PostImage  # 🔹 PostImage 추가
 from ..models.profile import Profile
 from ..serializers.search import PostSearchSerializer
 
