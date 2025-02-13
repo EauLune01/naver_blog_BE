@@ -1,14 +1,16 @@
+from main.serializers.category import CategorySerializer
 from rest_framework import generics, status
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema  # ✅ Swagger 추가
-from drf_yasg import openapi  # ✅ Swagger 문서 필드 설정
+from django.core.exceptions import ValidationError
 from main.models.category import Category
 from main.serializers.category import CategorySerializer
+from drf_yasg.utils import swagger_auto_schema  # ✅ Swagger 추가
+from drf_yasg import openapi  # ✅ Swagger 문서 필드 설정
 
 class CategoryListView(generics.ListCreateAPIView):
     """
-    ✅ 모든 카테고리 조회 (GET /categories/)
-    ✅ 새로운 카테고리 추가 (POST /categories/)
+    ✅ 모든 카테고리 조회 (GET /category/)
+    ✅ 새로운 카테고리 추가 (POST /category/)
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -37,15 +39,6 @@ class CategoryListView(generics.ListCreateAPIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-from rest_framework import generics, status
-from rest_framework.response import Response
-from django.core.exceptions import ValidationError
-from main.models.category import Category
-from main.serializers.category import CategorySerializer
-from drf_yasg.utils import swagger_auto_schema  # ✅ Swagger 추가
-from drf_yasg import openapi  # ✅ Swagger 문서 필드 설정
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
