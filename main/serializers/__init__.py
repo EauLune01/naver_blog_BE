@@ -8,3 +8,4 @@ from .neighbor import NeighborSerializer
 from .activity import ActivitySerializer
 from .news import NewsSerializer
 from .account import PasswordUpdateSerializer
+from .search import PostSearchSerializer

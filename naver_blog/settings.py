@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django_filters',
     'main',
     'drf_yasg',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
@@ -53,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'naver_blog.urls'
@@ -157,13 +159,9 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # 리프레시 토큰 유효 기간 설정 (7일)
 }
 
-# Swagger 설정 추가
-
-
 
 AUTH_USER_MODEL = 'main.CustomUser'
 
-import os
 
 # MEDIA_ROOT: 파일이 실제로 저장되는 경로
 MEDIA_ROOT = os.path.join(BASE_DIR, 'main/media')
@@ -185,3 +183,16 @@ SWAGGER_SETTINGS = {
         'BearerAuth': []
     }],
 }
+# 특정 도메인에서만 접근 허용
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5500",  # Live Server (프론트엔드 실행 주소)
+]
+
+# 모든 도메인 허용 (개발용)
+CORS_ALLOW_ALL_ORIGINS = True
+
+# 모든 HTTP 메서드 허용 (GET, POST, PUT, DELETE 등)
+CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+
+# 특정 헤더 허용
+CORS_ALLOW_HEADERS = ["*"]

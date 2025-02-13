@@ -10,3 +10,4 @@ from .commentHeart import ToggleCommentHeartView,CommentHeartCountView
 from .neighbor import NeighborView,NeighborAcceptView,NeighborRejectView,NeighborRequestListView,PublicNeighborListView
 from .activity import MyActivityListView
 from .news import MyNewsListView
+from .search import BlogPostSearchView, GlobalBlogSearchView, GlobalNickAndIdSearchView, GlobalPostSearchView

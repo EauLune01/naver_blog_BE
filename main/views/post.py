@@ -1,7 +1,8 @@
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework import status
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -16,6 +17,7 @@ from rest_framework.exceptions import MethodNotAllowed, ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import now, timedelta
 from pickle import FALSE
+
 
 def to_boolean(value):
     """
@@ -116,7 +118,6 @@ class PostListView(ListAPIView):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class PostCreateView(CreateAPIView):
     permission_classes = [IsAuthenticated]
@@ -252,7 +253,6 @@ class PostCreateView(CreateAPIView):
             status=201
         )
 
-
 class PostMyView(ListAPIView):
     """
     로그인된 유저가 작성한 모든 게시물 목록을 조회하는 API
@@ -304,30 +304,6 @@ class PostMyView(ListAPIView):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-class PostMyCurrentView(ListAPIView):
-    """
-    로그인된 유저가 작성한 최신 5개 게시물 목록을 조회하는 API
-    ✅ 로그인된 유저가 작성한 게시물 중 is_complete=True인 게시물만 조회
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = PostSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        # ✅ is_complete=True 조건 추가
-        return Post.objects.filter(author=user, is_complete=True).order_by('-created_at')[:5]
-
-    @swagger_auto_schema(
-        operation_summary="내가 작성한 최근 5개 게시물 조회",
-        operation_description="로그인된 유저가 작성한 게시물 중 is_complete=True인 상태에서 최근 5개만 반환합니다.",
-        responses={200: PostSerializer(many=True)}
-    )
-    def get(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class PostMyDetailView(RetrieveAPIView):
     """
@@ -484,7 +460,8 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               enum=['everyone', 'mutual', 'me'], required=False),
             openapi.Parameter('subject', openapi.IN_FORM, description='주제 (네이버 제공 소주제)', type=openapi.TYPE_STRING,
                               enum=[choice[0] for choice in Post.SUBJECT_CHOICES], required=False),
-            openapi.Parameter('is_complete', openapi.IN_FORM, description='작성 상태 (true: 작성 완료, false: 임시 저장)',
+            openapi.Parameter('is_complete', openapi.IN_FORM,
+                              description='작성 상태 (true: 작성 완료, false: 임시 저장 → 변경 가능, 단 true → false 변경 불가)',
                               type=openapi.TYPE_BOOLEAN, required=False),
             openapi.Parameter('update_texts', openapi.IN_FORM, description='수정할 텍스트 ID 목록 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
@@ -492,15 +469,15 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('content', openapi.IN_FORM, description='수정할 텍스트 내용 배열 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('font', openapi.IN_FORM, description='글씨체 배열 (JSON 형식)', type=openapi.TYPE_STRING,
-                              required=False),
-            openapi.Parameter('font_size', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식)', type=openapi.TYPE_STRING,
-                              required=False),
-            openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)', type=openapi.TYPE_STRING,
-                              required=False),
-            openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식)',
+            openapi.Parameter('font', openapi.IN_FORM, description='글씨체 배열 (JSON 형식)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식)',
+            openapi.Parameter('font_size', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식 문자열)',
+                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열 (새 이미지 업로드)', type=openapi.TYPE_ARRAY,
                               items=openapi.Items(type=openapi.TYPE_FILE), required=False),
@@ -508,47 +485,44 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
                               type=openapi.TYPE_STRING, required=False),
             openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)',
                               type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('image_group_ids', openapi.IN_FORM, description='이미지가 속한 그룹 배열 (각 이미지마다 개별 입력)',
-                              type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), required=False),
-            openapi.Parameter('group_captions', openapi.IN_FORM, description='그룹별 이미지 캡션 설정 (ex: {"3": "새 캡션"})',
-                              type=openapi.TYPE_OBJECT, required=False),
-            openapi.Parameter('group_representative', openapi.IN_FORM, description='대표 이미지 설정 (ex: {"3": true})',
-                              type=openapi.TYPE_OBJECT, required=False),
         ],
         responses={200: PostSerializer()},
     )
     def patch(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # 기본 필드 업데이트
-        instance.title = request.data.get('title', instance.title)
-        instance.category = request.data.get('category', instance.category)
-        instance.visibility = request.data.get('visibility', instance.visibility)
+        # ✅ subject 값 검증은 serializer에서 처리되므로 별도 검증 X
         instance.subject = request.data.get('subject', instance.subject)
 
-        # is_complete 필드 업데이트
+        # ✅ `is_complete=True`인 게시물은 `False`로 변경할 수 없음
         if "is_complete" in request.data:
-            new_is_complete = to_boolean(request.data["is_complete"])
+            new_is_complete = request.data["is_complete"] in [True, "true", "True", 1, "1"]
             if instance.is_complete and not new_is_complete:
                 return Response({"error": "작성 완료된 게시물은 다시 임시 저장 상태로 변경할 수 없습니다."}, status=400)
-            instance.is_complete = new_is_complete
+            instance.is_complete = new_is_complete  # ✅ Boolean 값 저장
 
+        # ✅ visibility 검증도 serializer에서 자동으로 처리됨 → 별도 검증 삭제
+        instance.visibility = request.data.get('visibility', instance.visibility)
+
+        # ✅ 기본 필드 업데이트
+        instance.title = request.data.get('title', instance.title)
+        instance.category = request.data.get('category', instance.category)
         instance.save()
 
+        # ✅ JSON 데이터 파싱 함수 (모든 JSON 필드를 안전하게 처리)
         def parse_json_data(field):
-            value = request.data.get(field)
-            if isinstance(value, str):
-                try:
-                    return json.loads(value.replace(" ", "")) if value else []
-                except json.JSONDecodeError:
-                    return []
-            elif isinstance(value, list):
-                return value
-            elif isinstance(value, int):
-                return [value]  # 정수값을 리스트로 변환하여 처리
-            return []
+            try:
+                if isinstance(request.data, list):  # 🔥 리스트 자체가 들어왔을 때
+                    return request.data
+                elif isinstance(request.data.get(field), str):  # 기존 방식 (필드가 JSON 문자열일 때)
+                    return json.loads(request.data.get(field, "[]"))
+                elif isinstance(request.data.get(field), list):  # `field` 필드가 리스트일 때
+                    return request.data.get(field, [])
+                return []
+            except json.JSONDecodeError:
+                return []
 
-        # 텍스트 수정 / 삭제 처리
+        # ✅ 텍스트 수정 / 삭제
         update_text_ids = parse_json_data('update_texts')
         remove_text_ids = parse_json_data('remove_texts')
         updated_contents = parse_json_data('content')
@@ -563,81 +537,82 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
         for idx, text_id in enumerate(update_text_ids):
             try:
                 text_obj = PostText.objects.get(id=text_id, post=instance)
-                if idx < len(updated_contents): text_obj.content = updated_contents[idx]
-                if idx < len(updated_fonts): text_obj.font = updated_fonts[idx]
-                if idx < len(updated_font_sizes): text_obj.font_size = updated_font_sizes[idx]
-                if idx < len(updated_is_bolds): text_obj.is_bold = updated_is_bolds[idx]
+
+                if idx < len(updated_contents):
+                    text_obj.content = updated_contents[idx]
+                if idx < len(updated_fonts):
+                    text_obj.font = updated_fonts[idx]
+                if idx < len(updated_font_sizes):
+                    text_obj.font_size = updated_font_sizes[idx]
+                if idx < len(updated_is_bolds):
+                    text_obj.is_bold = updated_is_bolds[idx]
+
                 text_obj.save()
             except PostText.DoesNotExist:
                 continue
-
-        # 새 텍스트 추가
+        # ✅ 새 텍스트 추가 (remove_texts와 update_texts가 비어있다면)
         if not remove_text_ids and not update_text_ids:
             for idx in range(len(updated_contents)):
                 PostText.objects.create(
                     post=instance,
-                    content=updated_contents[idx],
-                    font=updated_fonts[idx] if idx < len(updated_fonts) else "nanum_gothic",
-                    font_size=updated_font_sizes[idx] if idx < len(updated_font_sizes) else 15,
-                    is_bold=updated_is_bolds[idx] if idx < len(updated_is_bolds) else False,
+                    content=updated_contents[idx],  # 필수
+                    font=updated_fonts[idx] if idx < len(updated_fonts) else "nanum_gothic",  # 기본값: 나눔고딕
+                    font_size=updated_font_sizes[idx] if idx < len(updated_font_sizes) else 15,  # 기본값: 15
+                    is_bold=updated_is_bolds[idx] if idx < len(updated_is_bolds) else False,  # 기본값: False
                 )
 
-        # ✅ Swagger에서 숫자로 하나씩 추가하는 방식 반영 (post 메서드와 동일하게)
-        image_group_ids = request.data.getlist('image_group_ids')  # 리스트로 직접 받음
-        if len(image_group_ids) == 1 and isinstance(image_group_ids[0], str) and "," in image_group_ids[0]:
-            image_group_ids = image_group_ids[0].split(",")
-        image_group_ids = [int(x) for x in image_group_ids] if image_group_ids else []
+        # ✅ 이미지 관련 데이터 가져오기
+        images = request.FILES.getlist('images')  # 새로 업로드된 이미지 파일 리스트
+        captions = parse_json_data('captions')  # 캡션 배열 (id 없음)
+        is_representative_flags = parse_json_data('is_representative')  # 대표 여부 배열 (id 없음)
+        remove_images = parse_json_data('remove_images')  # 삭제할 이미지 ID 배열
+        update_images = parse_json_data('update_images')  # 기존 이미지 ID 리스트
 
-        # ✅ 이미지 관련 데이터 처리
-        images = request.FILES.getlist('images')
-        captions = parse_json_data('captions')
-        is_representative_flags = parse_json_data('is_representative')
-        image_group_ids = parse_json_data('image_group_ids')
-        remove_images = parse_json_data('remove_images')
-        update_images = parse_json_data('update_images')
-        group_captions = parse_json_data('group_captions')
-        group_representative = parse_json_data('group_representative')
-
+        # ✅ 기존 이미지 삭제
         PostImage.objects.filter(id__in=remove_images, post=instance).delete()
+
+        # ✅ 기존 이미지 수정 (ID 유지) - 업로드된 파일과 ID 매칭
         for idx, image_id in enumerate(update_images):
             try:
                 post_image = PostImage.objects.get(id=image_id, post=instance)
+
+                # ✅ 새로 업로드된 이미지가 있다면 교체
                 if idx < len(images):
-                    post_image.image.delete()
-                    post_image.image = images[idx]
-                    post_image.save(update_fields=["image"])
+                    post_image.image.delete()  # 기존 이미지 삭제
+                    post_image.image = images[idx]  # 새로운 이미지 저장
+
+                # ✅ captions 리스트의 idx가 유효하다면 업데이트
+                if idx < len(captions):
+                    post_image.caption = captions[idx]
+
+                # ✅ is_representative 값도 업데이트
+                if idx < len(is_representative_flags):
+                    post_image.is_representative = is_representative_flags[idx]
+
+                post_image.save()
             except PostImage.DoesNotExist:
-                continue
+                continue  # 존재하지 않으면 무시
 
-        # ✅ image_group_ids가 리스트가 아닐 경우 변환
-        image_group_ids = parse_json_data('image_group_ids')
-        if not isinstance(image_group_ids, list):
-            image_group_ids = [image_group_ids]  # 단일 정수 값이라면 리스트로 변환
-
-        # ✅ group_id 할당 수정 (빈 리스트일 경우 기본값 1)
-        created_images = []
-        for idx, image in enumerate(images[len(update_images):]):
-            group_id = image_group_ids[idx] if image_group_ids and idx < len(image_group_ids) else 1
-            caption = captions[idx] if idx < len(captions) else None
-            is_representative = is_representative_flags[idx] if idx < len(is_representative_flags) else False
-
-            post_image = PostImage.objects.create(
+        # ✅ 새 이미지 추가 (ID가 새로 생성됨)
+        for idx, image in enumerate(images[len(update_images):]):  # 기존 이미지 수정 후 남은 파일들
+            PostImage.objects.create(
                 post=instance,
                 image=image,
-                image_group_id=group_id,
-                caption=caption,
-                is_representative=is_representative
+                caption=captions[idx] if idx < len(captions) else None,
+                is_representative=is_representative_flags[idx] if idx < len(is_representative_flags) else False,
             )
-            created_images.append(post_image)
 
-        for group_id, caption in group_captions.items():
-            PostImage.objects.filter(post=instance, image_group_id=group_id).update(caption=caption)
+        # ✅ 대표 이미지 중복 검사 및 자동 설정
+        representative_images = instance.images.filter(is_representative=True)
+        if representative_images.count() > 1:
+            return Response({"error": "대표 이미지는 한 개만 설정할 수 있습니다."}, status=400)
 
-        if group_representative:
-            selected_group = list(group_representative.keys())[0]
-            PostImage.objects.filter(post=instance).update(is_representative=False)
-            PostImage.objects.filter(post=instance, image_group_id=selected_group).update(is_representative=True)
+        if representative_images.count() == 0 and instance.images.exists():
+            first_image = instance.images.first()
+            first_image.is_representative = True
+            first_image.save()
 
+        # ✅ 응답 반환
         serializer = PostSerializer(instance)
         return Response(serializer.data, status=200)
 
@@ -648,6 +623,7 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
     )
     def delete(self, request, *args, **kwargs):
         instance = self.get_object()
+        folder_path = None
 
         # ✅ 폴더 경로 저장 (main/media/카테고리/제목)
         if instance.images.exists():
@@ -711,3 +687,143 @@ class DraftPostDetailView(RetrieveAPIView):
         요청한 사용자의 특정 임시 저장된 게시물만 반환
         """
         return Post.objects.filter(author=self.request.user, is_complete=False)
+
+
+class PostMyCurrentView(ListAPIView):
+    """
+    로그인된 유저가 작성한 최신 5개 게시물 목록을 조회하는 API
+    ✅ 로그인된 유저가 작성한 게시물 중 is_complete=True인 게시물만 조회
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # ✅ is_complete=True 조건 추가
+        return Post.objects.filter(author=user, is_complete=True).order_by('-created_at')[:5]
+
+    @swagger_auto_schema(
+        operation_summary="내가 작성한 최근 5개 게시물 조회",
+        operation_description="로그인된 유저가 작성한 게시물 중 is_complete=True인 상태에서 최근 5개만 반환합니다.",
+        responses={200: PostSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class PostPublicCurrentView(ListAPIView):
+    """
+    특정 사용자의 최신 5개 게시물을 조회하는 API (서로이웃 여부 고려)
+    """
+    permission_classes = []
+    serializer_class = PostSerializer
+
+    def get_queryset(self):
+        """
+        ✅ 특정 사용자의 블로그 게시물 중 서로이웃 여부에 따라 'mutual' 공개 포함 여부 결정
+        """
+        urlname = self.kwargs.get("urlname")  # 조회 대상 블로그 (사용자) ID
+        viewer = self.request.user  # 현재 API를 호출하는 사용자
+
+        # ✅ 조회 대상 블로그 주인 찾기 (Profile → User)
+        profile = get_object_or_404(Profile, urlname=urlname)
+        blog_owner = profile.user
+
+        # ✅ 본인이 자신의 블로그를 조회하는 경우 모든 게시물 조회
+        if viewer == blog_owner:
+            return Post.objects.filter(author=blog_owner, is_complete=True).order_by("-created_at")[:5]
+
+        # ✅ 서로이웃 여부 확인
+        is_mutual = Neighbor.objects.filter(
+            (Q(from_user=viewer, to_user=blog_owner) | Q(from_user=blog_owner, to_user=viewer)),
+            status="accepted"
+        ).exists()
+
+        # ✅ 공개 범위 조건 설정
+        if is_mutual:
+            visibility_filter = Q(visibility__in=["everyone", "mutual"])
+        else:
+            visibility_filter = Q(visibility="everyone")
+
+        # ✅ 필터 적용하여 게시물 가져오기 (최근 5개)
+        return Post.objects.filter(
+            visibility_filter,
+            author=blog_owner,
+            is_complete=True
+        ).order_by("-created_at")[:5]
+
+    @swagger_auto_schema(
+        operation_summary="타인의 블로그에서 최신 5개 게시물 조회",
+        operation_description="특정 사용자의 블로그에서 최근 5개의 게시물을 가져옵니다. "
+                              "서로이웃일 경우 'mutual'까지 포함하고, 아니라면 'everyone' 공개 글만 반환합니다.",
+        responses={200: PostSerializer(many=True)}
+    )
+    def get(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PostCountView(APIView):
+    """
+    특정 사용자의 게시물 개수를 반환하는 API
+    ✅ 본인이 조회하는 경우: 임시저장 제외 모든 글 개수
+    ✅ 타인이 조회하는 경우:
+        - 서로이웃이면 '전체 공개 + 서로이웃 공개' 게시물 개수
+        - 서로이웃이 아니면 '전체 공개' 게시물 개수
+    ✅ 로그인하지 않은 사용자가 조회하는 경우:
+        - 전체 공개(`everyone`) 게시물 개수만 반환
+    """
+    permission_classes = [AllowAny]  # 인증 없이 접근 가능 (서로이웃 여부에 따라 결과 달라짐)
+    @swagger_auto_schema(
+        operation_summary="사용자의 글 개수 조회",
+        operation_description="특정 사용자의 블로그에 작성된 글의 개수를 가져옵니다. "
+                              "로그인한 본인이 자신의 블로그를 조회하는 경우, 서로이웃이 조회하는 경우, 서로이웃이 아닌 사용자가 조회하는 경우 모두 고려하여 반영.",
+
+    )
+
+
+    def get(self, request, urlname, *args, **kwargs):
+        """
+        GET 요청을 통해 특정 사용자의 게시물 개수 반환
+        """
+        profile = get_object_or_404(Profile, urlname=urlname)
+        blog_owner = profile.user
+        current_user = request.user if request.user.is_authenticated else None
+
+        # ✅ 로그인하지 않은 사용자가 조회하는 경우 → 전체 공개 게시물만 세서 반환
+        if not current_user:
+            post_count = Post.objects.filter(
+                author=blog_owner, is_complete=True, visibility="everyone"
+            ).count()
+            return Response({"urlname": urlname, "post_count": post_count})
+
+        # ✅ 본인이 자신의 블로그를 조회하는 경우 → 모든 작성 완료된 게시물 개수 반환
+        if current_user == blog_owner:
+            post_count = Post.objects.filter(author=blog_owner, is_complete=True).count()
+            return Response({"urlname": urlname, "post_count": post_count})
+
+        # ✅ 서로이웃 관계 확인
+        is_neighbor = Neighbor.objects.filter(
+            (Q(from_user=current_user, to_user=blog_owner) |
+             Q(from_user=blog_owner, to_user=current_user)),
+            status="accepted"
+        ).exists()
+
+        # ✅ 서로이웃이면 '전체 공개 + 서로이웃 공개' 게시물 개수 반환
+        if is_neighbor:
+            post_count = Post.objects.filter(
+                author=blog_owner,
+                is_complete=True,
+                visibility__in=["everyone", "mutual"]
+            ).count()
+        else:
+            # ✅ 서로이웃이 아니면 '전체 공개' 게시물 개수만 반환
+            post_count = Post.objects.filter(
+                author=blog_owner,
+                is_complete=True,
+                visibility="everyone"
+            ).count()
+
+        return Response({"urlname": urlname, "post_count": post_count})

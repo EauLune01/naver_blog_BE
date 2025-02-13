@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from ..models.profile import Profile
-from PIL import image
+from PIL import Image
 
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
