@@ -7,6 +7,7 @@ class CommentHeart(models.Model):
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="hearts")  # ✅ 어떤 댓글에 하트를 눌렀는지
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # ✅ 누가 눌렀는지 저장
     created_at = models.DateTimeField(auto_now_add=True)  # ✅ 좋아요 누른 시간
+    is_read = models.BooleanField(default=False)  # ✅ 추가됨
 
     class Meta:
         unique_together = ('comment', 'user')  # ✅ 한 유저가 하나의 댓글/대댓글에 한 번만 좋아요 가능

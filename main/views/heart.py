@@ -48,7 +48,7 @@ class ToggleHeartView(generics.GenericAPIView):
             return Response({"error": "이 게시글에서는 좋아요를 누를 수 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 하트 가능 (is_mutual 대신 neighbors 사용)
-        if post.visibility == 'mutual' and not post.author.profile.neighbors.filter(id=user.profile.id).exists():
+        if post.visibility == 'mutual' and not post.user.profile.neighbors.filter(id=user.profile.id).exists():
             return Response({"error": "서로 이웃만 이 게시글에 좋아요를 누를 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ 현재 유저가 이미 하트를 눌렀는지 확인하고 최적화
@@ -97,11 +97,11 @@ class PostHeartUsersView(generics.RetrieveAPIView):
         user = request.user
 
         # ✅ '나만 보기' 게시글이면 하트 유저 목록 조회 불가
-        if post.visibility == 'me' and post.author != user:
+        if post.visibility == 'me' and post.user != user:
             return Response({"error": "이 게시글의 좋아요 유저 목록을 조회할 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 하트 목록 조회 가능 (is_mutual 대신 neighbors 사용)
-        if post.visibility == 'mutual' and not post.author.profile.neighbors.filter(id=user.profile.id).exists():
+        if post.visibility == 'mutual' and not post.user.profile.neighbors.filter(id=user.profile.id).exists():
             return Response({"error": "서로 이웃만 이 게시글의 좋아요 유저 목록을 조회할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         hearts = Heart.objects.filter(post=post).select_related('user__profile')  # ✅ profile까지 join
@@ -131,11 +131,11 @@ class PostHeartCountView(generics.RetrieveAPIView):
         user = request.user
 
         # ✅ '나만 보기' 게시글이면 하트 개수 조회 불가
-        if post.visibility == 'me' and post.author != user:
+        if post.visibility == 'me' and post.user != user:
             return Response({"error": "이 게시글의 하트 개수를 조회할 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 하트 개수 조회 가능 (is_mutual 대신 neighbors 사용)
-        if post.visibility == 'mutual' and not post.author.profile.neighbors.filter(id=user.profile.id).exists():
+        if post.visibility == 'mutual' and not post.user.profile.neighbors.filter(id=user.profile.id).exists():
             return Response({"error": "서로 이웃만 이 게시글의 하트 개수를 조회할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         return Response({"like_count": post.like_count}, status=status.HTTP_200_OK)

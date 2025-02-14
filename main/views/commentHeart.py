@@ -34,22 +34,14 @@ class ToggleCommentHeartView(generics.GenericAPIView):
             )),
         }
     )
-    def post(self, request, post_id, comment_id, *args, **kwargs):  # ✅ post_id 추가!
+    def post(self, request, post_id, comment_id, *args, **kwargs):
         comment = get_object_or_404(
-            Comment.objects.select_related("post", "post__author", "post__author__profile"),
-            id=comment_id, post_id=post_id  # ✅ post_id도 필터링에 추가!
+            Comment.objects.select_related("post", "post__user", "post__user__profile"),
+            id=comment_id, post_id=post_id
         )
         user = request.user
 
-        # ✅ '나만 보기' 게시글의 댓글이면 좋아요 불가능
-        if comment.post.visibility == 'me':
-            return Response({"error": "이 게시글의 댓글에는 좋아요를 누를 수 없습니다."}, status=status.HTTP_403_FORBIDDEN)
-
-        # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 댓글 좋아요 가능
-        if comment.post.visibility == 'mutual' and not comment.post.author.profile.neighbors.filter(id=user.profile.id).exists():
-            return Response({"error": "서로 이웃만 이 게시글의 댓글에 좋아요를 누를 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
-
-        # ✅ 비밀 댓글/대댓글은 좋아요 기능 없음
+        # ✅ 비밀 댓글/대댓글은 좋아요 불가능
         if comment.is_private:
             return Response({"error": "비밀 댓글에는 좋아요 기능이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -59,15 +51,13 @@ class ToggleCommentHeartView(generics.GenericAPIView):
         if not created:
             # ✅ 이미 좋아요를 눌렀다면 취소 (삭제)
             heart.delete()
+            like_count = CommentHeart.objects.filter(comment=comment).count()
+            return Response({"message": "좋아요 취소됨", "like_count": like_count}, status=status.HTTP_200_OK)
 
-        # ✅ 최신 좋아요 개수 동기화
-        like_count = CommentHeart.objects.filter(comment=comment).count()
+        # ✅ 좋아요 추가
+        like_count = CommentHeart.objects.filter(comment=comment).count()  # 💡 변경된 부분
 
-        return Response({
-            "message": "좋아요 추가됨" if created else "좋아요 취소됨",
-            "like_count": like_count
-        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
-
+        return Response({"message": "좋아요 추가됨", "like_count": like_count}, status=status.HTTP_201_CREATED)
 
 
 class CommentHeartCountView(generics.RetrieveAPIView):
@@ -97,11 +87,11 @@ class CommentHeartCountView(generics.RetrieveAPIView):
             return Response({"error": "로그인이 필요합니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ '나만 보기' 게시글이면 게시글 작성자 본인만 조회 가능
-        if comment.post.visibility == 'me' and comment.post.author != user:
+        if comment.post.visibility == 'me' and comment.post.user != user:
             return Response({"error": "이 게시글의 댓글 좋아요 개수를 조회할 수 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 좋아요 개수 조회 가능
-        if comment.post.visibility == 'mutual' and not comment.post.author.profile.neighbors.filter(id=user.profile.id).exists():
+        if comment.post.visibility == 'mutual' and not comment.post.user.profile.neighbors.filter(id=user.profile.id).exists():
             return Response({"error": "서로 이웃만 이 게시글의 댓글 좋아요 개수를 조회할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
         # ✅ 최신 좋아요 개수 동기화

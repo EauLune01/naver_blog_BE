@@ -1,16 +1,9 @@
-from rest_framework import serializers
-from main.models.post import Post
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated
+from drf_yasg.utils import swagger_auto_schema
+from main.serializers import NewsSerializer
 from main.models.comment import Comment
 from main.models.heart import Heart
-from rest_framework.views import APIView
-from rest_framework.generics import ListAPIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
-from drf_yasg.utils import swagger_auto_schema
-from django.db.models import Q
-from main.serializers import NewsSerializer
-
 
 class MyNewsListView(ListAPIView):
     """
@@ -26,24 +19,24 @@ class MyNewsListView(ListAPIView):
     )
     def get_queryset(self):
         user = self.request.user
-        profile = user.profile
+        profile = user.profile  # ✅ Profile 객체 가져오기
 
-        # ✅ 내가 작성한 게시글에 달린 댓글
+        # ✅ 내가 작성한 게시글에 달린 댓글 (post__author → post__user)
         post_comment_news = list(Comment.objects.filter(
-            post__author=user, is_read=False
+            post__user=user, is_read=False
         ).select_related('post', 'author').order_by('-created_at'))
 
-        # ✅ 내가 작성한 게시글에 달린 좋아요
+        # ✅ 내가 작성한 게시글에 달린 좋아요 (post__author → post__user)
         post_like_news = list(Heart.objects.filter(
-            post__author=user, is_read=False
+            post__user=user, is_read=False
         ).select_related('post', 'user').order_by('-created_at'))
 
-        # ✅ 내가 작성한 댓글에 달린 대댓글
+        # ✅ 내가 작성한 댓글에 달린 대댓글 (parent__author → parent__author.user)
         comment_reply_news = list(Comment.objects.filter(
-            parent__author=profile, is_read=False
+            parent__author=user.profile, is_read=False
         ).select_related('post', 'author').order_by('-created_at'))
 
-        # ✅ `activity_id`를 조합하여 중복을 방지하면서 최신순 정렬
+        # ✅ 최신순으로 정렬하고 최대 5개 반환
         combined_news = sorted(
             post_comment_news + post_like_news + comment_reply_news,
             key=lambda obj: obj.created_at,
@@ -51,4 +44,3 @@ class MyNewsListView(ListAPIView):
         )[:5]
 
         return combined_news
-

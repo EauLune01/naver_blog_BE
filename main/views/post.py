@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from ..models import Post, PostImage,CustomUser,Profile
+from ..models import Post, PostImage,CustomUser,Profile,Category
 from ..models.neighbor import Neighbor
 from django.db.models import Q
 from ..serializers import PostSerializer
@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.timezone import now, timedelta
 from pickle import FALSE
-from main.utils import *
+from main.utils.utils import save_images_from_request
 
 def to_boolean(value):
     """
@@ -45,51 +45,58 @@ class PostListView(ListAPIView):
 
     def get_queryset(self):
         urlname = self.request.query_params.get('urlname', None)
-        category_name = self.request.query_params.get('category_name', None)
+        category = self.request.query_params.get('category', None)  # ✅ category_name → category로 변경
         pk = self.request.query_params.get('pk', None)
         keyword = self.request.query_params.get('keyword', None)
 
-        # ✅ category_name만 존재할 경우 에러 처리
-        if category_name and not (urlname or pk):
+        # ✅ category만 존재할 경우 에러 처리
+        if category and not (urlname or pk):
             raise ValidationError("카테고리만 입력된 경우는 허용하지 않습니다.")
 
         # ✅ keyword는 단독으로 사용해야 함
-        if keyword and (urlname or category_name or pk):
+        if keyword and (urlname or category or pk):
             raise ValidationError("keyword는 단독으로 사용해야 합니다.")
 
-        request_user = self.request.user  # ✅ API 요청을 보낸 유저 (예: sm)
-        profile_user = None  # ✅ urlname을 통한 조회 유저 (예: kdy)
+        request_user = self.request.user  # ✅ API 요청을 보낸 유저
 
-        # ✅ `urlname`이 주어진 경우, Profile에서 해당 `urlname`을 가진 유저 찾기
+        # ✅ 전체 공개 게시물 (자기 글 제외)
+        public_posts = Post.objects.filter(status="published", visibility="everyone").exclude(user=request_user)
+
+        # ✅ 서로이웃 공개 게시물 (자기 글 제외)
+        mutual_posts = Post.objects.filter(
+            status="published",
+            visibility="mutual",
+            user__profile__neighbors=request_user.profile
+        ).exclude(user=request_user)
+
+        # ✅ 특정 사용자의 게시물 조회 (`urlname`이 주어진 경우)
         if urlname:
             profile = Profile.objects.filter(urlname=urlname).select_related("user").first()
             if not profile:
                 return Post.objects.none()  # 존재하지 않는 경우 빈 쿼리셋 반환
-            profile_user = profile.user  # ✅ Profile의 `user`를 사용
+            profile_user = profile.user
+            queryset = Post.objects.filter(user=profile_user, status="published").exclude(user=request_user)
         else:
-            profile_user = request_user  # ✅ urlname이 없으면 기본적으로 API 요청한 유저 사용
+            queryset = (public_posts | mutual_posts).distinct()  # ✅ 중복 제거!
 
-        # ✅ keyword가 주어진 경우, 해당 키워드의 게시물만 필터링
+        # ✅ keyword 필터링
         if keyword:
             if keyword not in dict(Post.KEYWORD_CHOICES):
                 raise ValidationError(f"'{keyword}'은(는) 유효하지 않은 keyword 값입니다.")
-            queryset = Post.objects.filter(keyword=keyword, status="published", user=profile_user)
-            return queryset
+            return queryset.filter(keyword=keyword)
 
-        # ✅ `profile_user`가 작성한 모든 `published` 게시물 가져오기
-        queryset = Post.objects.filter(user=profile_user, status="published")
-
-        # ✅ `category_name`을 이용해 ForeignKey `category` 필터링
-        if category_name:
+        # ✅ 특정 카테고리 필터링 (이름을 `category`로 변경)
+        if category:
             try:
-                category = Category.objects.get(name=category_name)  # 🔹 문자열로 받은 이름을 Category 모델에서 조회
-                queryset = queryset.filter(category=category)
+                category_obj = Category.objects.get(name=category)  # ✅ category → category_obj로 변경
+                queryset = queryset.filter(category=category_obj)
             except Category.DoesNotExist:
                 return Post.objects.none()  # 존재하지 않는 카테고리일 경우 빈 쿼리셋 반환
 
-        # ✅ 특정 `pk`의 게시물 조회
+        # ✅ 특정 pk 필터링
         if pk:
             queryset = queryset.filter(pk=pk)
+
         return queryset
 
     @swagger_auto_schema(
