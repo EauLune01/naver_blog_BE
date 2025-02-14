@@ -23,7 +23,7 @@ from main.views.login import LoginView
 from main.views.logout import LogoutView
 from main.views.account import PasswordUpdateView
 from main.views.profile import ProfileDetailView, ProfilePublicView, ProfileUrlnameUpdateView
-from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView, PostMyCurrentView, PostPublicCurrentView, PostCountView
+from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMyRecentView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView, PostMyCurrentView, PostPublicCurrentView, PostCountView
 from main.views.category import CategoryListView, CategoryDetailView
 from main.views.comment import CommentListView, CommentDetailView
 from main.views.heart import ToggleHeartView, PostHeartUsersView, PostHeartCountView
@@ -91,6 +91,7 @@ urlpatterns = [
     path('posts/me/', PostMyView.as_view(), name='post-my-list'),  # 내가 작성한 게시물 목록 조회, 쿼리 파라미터 활용!
     path('posts/me/<int:pk>/', PostMyDetailView.as_view(), name='post-my-detail'),  # 내가 작성한 게시물 상세 조회
     path('posts/me/create/', PostCreateView.as_view(), name='post-create'),  # 게시물 생성 (POST)
+    path('posts/me/recent/', PostMyRecentView.as_view(), name='post-my-recent'), #내가 작성한 게시물 중 제일 최근 게시물 1개 조회
     path('posts/me/<int:pk>/manage/', PostManageView.as_view(), name='post-manage'),  # 게시물 수정/삭제 (PUT, PATCH, DELETE)
     path('posts/me/current/', PostMyCurrentView.as_view(), name='post-my-current'), # 내가 작성한 게시물 목록 최신 5개 조회
 

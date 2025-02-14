@@ -7,12 +7,12 @@ from ..models.category import Category
 def image_upload_path(instance, filename):
     """
     ✅ 이미지 업로드 경로 설정
-    - 경로: post_pics/{user_id}/{category}/{title}/{filename}
+    - 경로: post_pics/{post_id}/{filename}
     """
-    user_id = instance.post.author.id
-    category = slugify(instance.post.category)
-    title = slugify(instance.post.title)
-    return f"post_pics/{user_id}/{category}/{title}/{filename}"
+    post_id = instance.post.id or "unknown"  # post.id 사용
+    ext = filename.split('.')[-1]  # 확장자 추출
+    filename = f"{post_id}_{instance.pk}.{ext}"  # '게시물ID_이미지ID.확장자' 형식
+    return os.path.join("post_pics", str(post_id), filename)
 
 
 class Post(models.Model):
@@ -47,8 +47,11 @@ class Post(models.Model):
         ('published', '발행'),
     ]
 
-
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,  # ✅ CustomUser 참조
+        on_delete=models.CASCADE,
+        related_name="posts"
+    )
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_DEFAULT,  # ✅ 삭제 시 기본값으로 변경
@@ -70,7 +73,6 @@ class Post(models.Model):
         default='everyone',
         verbose_name="공개 범위"
     )
-    is_complete = models.BooleanField(default=False, verbose_name="작성 상태")  # ✅ 임시저장 여부
     like_count = models.PositiveIntegerField(default=0)  # 하트 개수 저장
     comment_count = models.PositiveIntegerField(default=0)  # 댓글 개수 저장
     created_at = models.DateTimeField(auto_now_add=True)
@@ -99,23 +101,21 @@ class Post(models.Model):
 
 class PostImage(models.Model):
     """
-    ✅ 이미지 저장 모델
-    - `image_url` 필드 추가 → content에 들어가는 이미지 URL 저장
-    - `image` 필드 유지 → 실제 이미지 파일 저장
+    ✅ 게시물에 포함된 이미지 저장 모델
     """
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to=image_upload_path)  # ✅ 실제 이미지 파일 저장
-    image_url = models.URLField(blank=True, null=True)  # ✅ HTML 본문 내에서 참조될 URL 저장
+    image = models.ImageField(upload_to=image_upload_path)  # ✅ post.id 기반 이미지 저장
+    image_url = models.URLField(blank=True, null=True)  # ✅ HTML 본문 내 이미지 URL
     caption = models.CharField(max_length=255, blank=True, null=True)
     is_representative = models.BooleanField(default=False, verbose_name="대표 사진 여부")
 
     def save(self, *args, **kwargs):
         """
-        ✅ 이미지 저장 시 image_url 자동 설정
+        ✅ 이미지 저장 시 자동으로 image_url 설정
         """
         super().save(*args, **kwargs)
         if not self.image_url and self.image:
-            self.image_url = self.image.url
+            self.image_url = self.image.url  # ✅ 경로에 맞춰 URL 자동 반영
             super().save(update_fields=["image_url"])
 
     def __str__(self):

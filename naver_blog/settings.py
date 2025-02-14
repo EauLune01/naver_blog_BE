@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     'django_filters',
     'main',
     'drf_yasg',
-    'corsheaders'
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -189,10 +189,10 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # 모든 도메인 허용 (개발용)
-CORS_ALLOW_ALL_ORIGINS = True
+#CORS_ALLOW_ALL_ORIGINS = True
 
 # 모든 HTTP 메서드 허용 (GET, POST, PUT, DELETE 등)
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH","OPTIONS"]
 
-# 특정 헤더 허용
+# 특정 헤더 허용 (authorization 추가)
 CORS_ALLOW_HEADERS = ["*"]
