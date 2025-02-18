@@ -11,4 +11,4 @@ from .neighbor import NeighborView,NeighborAcceptView,NeighborRejectView,Neighbo
 from .activity import MyActivityListView
 from .news import MyNewsListView
 from .search import BlogPostSearchView, GlobalBlogSearchView, GlobalNickAndIdSearchView, GlobalPostSearchView
-from .category import CategoryListView,CategoryDetailView
+from .category import CategoryListView,CategoryDetailView,MyCategoryListView,MyCategoryDetailView

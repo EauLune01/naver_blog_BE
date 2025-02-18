@@ -13,7 +13,7 @@ from ..serializers import PostSerializer
 import json
 import os
 import shutil
-from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.exceptions import NotFound,MethodNotAllowed, ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.timezone import now, timedelta
@@ -298,25 +298,43 @@ class PostMyDetailView(RetrieveAPIView):
 
 class PostMyRecentView(RetrieveAPIView):
     """
-    ✅ 로그인한 사용자가 작성한 게시물 중 가장 최근 `published` 상태인 게시물 조회 API
+    ✅ 로그인한 사용자가 작성한 게시물 중 n번째 최신 `published` 상태인 게시물 조회 API
     """
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
 
     def get_object(self):
         user = self.request.user
+        n = self.request.query_params.get("n", "1")  # 쿼리 파라미터에서 `n` 가져오기 (기본값: 1)
 
-        # 현재 로그인한 사용자의 `published` 상태인 게시물 중 가장 최신(created_at 기준) 1개 가져오기
-        post = Post.objects.filter(user=user, status='published').order_by('-created_at').first()
+        # n이 숫자인지 확인하고 정수 변환
+        try:
+            n = int(n)
+            if n < 1:
+                raise ValueError
+        except ValueError:
+            raise ValidationError("n은 1 이상의 정수여야 합니다.")
 
-        if not post:
-            raise NotFound("출판된 게시물이 없습니다.")
+        # 현재 로그인한 사용자의 `published` 상태인 게시물 중 최신순으로 n번째 게시물 가져오기
+        posts = Post.objects.filter(user=user, status='published').order_by('-created_at')
 
-        return post
+        if len(posts) < n:
+            raise NotFound(f"출판된 게시물이 {n}개 미만입니다.")
+
+        return posts[n - 1]  # 0-based index
 
     @swagger_auto_schema(
         operation_summary="내가 작성한 가장 최근 게시물 조회",
-        operation_description="로그인한 사용자가 작성한 게시물 중 `published` 상태이며, 가장 최근 생성된 게시물 1개를 조회합니다.",
+        operation_description="로그인한 사용자가 작성한 게시물 중 `published` 상태이며, `n`번째 최신 게시물을 조회합니다. "
+                              "`n`을 쿼리 파라미터로 입력하면 n번째 최신 게시물을 가져옵니다. (기본값: 1)",
+        manual_parameters=[
+            openapi.Parameter(
+                'n', openapi.IN_QUERY,
+                description="가져올 n번째 최신 게시물 (1부터 시작)",
+                required=False,
+                type=openapi.TYPE_INTEGER
+            ),
+        ],
         responses={200: PostSerializer()},
     )
     def get(self, request, *args, **kwargs):

@@ -24,7 +24,7 @@ from main.views.logout import LogoutView
 from main.views.account import PasswordUpdateView
 from main.views.profile import ProfileDetailView, ProfilePublicView, ProfileUrlnameUpdateView
 from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMyRecentView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView, PostMyCurrentView, PostPublicCurrentView, PostCountView
-from main.views.category import CategoryListView, CategoryDetailView
+from main.views.category import CategoryListView,CategoryDetailView,MyCategoryListView,MyCategoryDetailView
 from main.views.comment import CommentListView, CommentDetailView
 from main.views.heart import ToggleHeartView, PostHeartUsersView, PostHeartCountView
 from main.views.commentHeart import ToggleCommentHeartView, CommentHeartCountView
@@ -79,11 +79,13 @@ urlpatterns = [
     path('neighbors/reject/<str:from_urlname>/', NeighborRejectView.as_view(), name='neighbor-reject'),
     path('neighbors/count/<str:urlname>/', NeighborNumberView.as_view(), name='neighbor-count'),
 
-    # 게시물 검색 관련 API (블로그 내 검색)
-    path('search/blog/', BlogPostSearchView.as_view(), name='blog-post-search'),
-    path('search/global-blog/', GlobalBlogSearchView.as_view(), name='global-blog-search'),
-    path('search/global-nickandid/', GlobalNickAndIdSearchView.as_view(), name='global-nickandid-search'),
-    path('search/global-post/', GlobalPostSearchView.as_view(), name='global-post-search'),
+    # 카테고리 관련 API
+
+    path('category/', CategoryListView.as_view(), name='category-list'), # 쿼리 파라미터로 urlname 입력해 타인의 카테고리 list 조회
+    path('category/<int:pk>/', CategoryDetailView.as_view(), name='category-detail'), # 타인의 카테고리 상세 조회
+    path('category/me', MyCategoryListView.as_view(), name="category-my-list"),  # ✅ 목록 조회 & 추가
+    path('category/me/<int:pk>/', MyCategoryDetailView.as_view(), name="category-my-detail"),  # ✅ 조회, 수정, 삭제
+
 
     # ✅ 게시물 관련 API
 
@@ -94,10 +96,6 @@ urlpatterns = [
     path('posts/me/recent/', PostMyRecentView.as_view(), name='post-my-recent'), #내가 작성한 게시물 중 제일 최근 게시물 1개 조회
     path('posts/me/<int:pk>/manage/', PostManageView.as_view(), name='post-manage'),  # 게시물 수정/삭제 (PUT, PATCH, DELETE)
     path('posts/me/current/', PostMyCurrentView.as_view(), name='post-my-current'), # 내가 작성한 게시물 목록 최신 5개 조회
-
-    # 카테고리
-    path('category/', CategoryListView.as_view(), name="category-list"),  # ✅ 목록 조회 & 추가
-    path('category/<int:pk>/', CategoryDetailView.as_view(), name="category-detail"),  # ✅ 조회, 수정, 삭제
 
     # 게시물 개수 세기
     path('posts/count/<str:urlname>/', PostCountView.as_view(), name='post-count'),
@@ -114,6 +112,12 @@ urlpatterns = [
     #임시 저장된 게시물 관련 API
     path('posts/drafts/', DraftPostListView.as_view(), name='draft_post_list'),  # 임시 저장된 게시물 목록 조회
     path('posts/drafts/<int:pk>/', DraftPostDetailView.as_view(), name='draft_post_detail'),  # 임시 저장된 게시물 상세 조회
+
+    # 게시물 검색 관련 API (블로그 내 검색)
+    path('search/blog/', BlogPostSearchView.as_view(), name='blog-post-search'),
+    path('search/global-blog/', GlobalBlogSearchView.as_view(), name='global-blog-search'),
+    path('search/global-nickandid/', GlobalNickAndIdSearchView.as_view(), name='global-nickandid-search'),
+    path('search/global-post/', GlobalPostSearchView.as_view(), name='global-post-search'),
 
     # ✅ 특정 게시글의 댓글 목록 조회 & 댓글 작성
     path('posts/<int:post_id>/comments/', CommentListView.as_view(), name='comment-list'),
