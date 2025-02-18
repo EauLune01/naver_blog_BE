@@ -80,7 +80,6 @@ urlpatterns = [
     path('neighbors/count/<str:urlname>/', NeighborNumberView.as_view(), name='neighbor-count'),
 
     # 카테고리 관련 API
-
     path('category/', CategoryListView.as_view(), name='category-list'), # 쿼리 파라미터로 urlname 입력해 타인의 카테고리 list 조회
     path('category/<int:pk>/', CategoryDetailView.as_view(), name='category-detail'), # 타인의 카테고리 상세 조회
     path('category/me', MyCategoryListView.as_view(), name="category-my-list"),  # ✅ 목록 조회 & 추가

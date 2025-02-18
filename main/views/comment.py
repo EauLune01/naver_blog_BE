@@ -24,17 +24,20 @@ class CommentListView(ListCreateAPIView):
         operation_description="게시글의 댓글 및 대댓글을 조회합니다. 비밀 댓글은 작성자 또는 게시글 작성자만 볼 수 있습니다.",
         responses={
             200: openapi.Response(description="조회 성공", schema=CommentSerializer(many=True)),
-            403: openapi.Response(description="조회 권한이 없습니다.")
+            403: openapi.Response(description="조회 권한이 없습니다."),
+            404: openapi.Response(description="게시글을 찾을 수 없습니다."),
         }
     )
     def get(self, request, *args, **kwargs):
         queryset = self.get_queryset()
 
-        if not queryset.exists():
-            return Response({"error": "이 게시글의 댓글을 조회할 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
+        # 게시글이 없는 경우 404 반환
+        if queryset is None:
+            return Response({"error": "게시글을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
 
-        self.queryset = queryset
-        return super().get(request, *args, **kwargs)
+        # 🔥 `context={'request': request}` 추가!
+        serializer = self.serializer_class(queryset, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_queryset(self):
         """
