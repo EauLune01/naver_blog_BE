@@ -256,6 +256,7 @@ class PublicNeighborListView(APIView):
                                 type=openapi.TYPE_OBJECT,
                                 properties={
                                     "urlname": openapi.Schema(type=openapi.TYPE_STRING, description="서로이웃 사용자의 URL 이름"),
+                                    "username": openapi.Schema(type=openapi.TYPE_STRING, description="서로이웃 사용자의 닉네임"),  # ✅ 추가
                                     "user_pic": openapi.Schema(type=openapi.TYPE_STRING, format="url", description="프로필 이미지 URL"),
                                 }
                             )
@@ -280,18 +281,22 @@ class PublicNeighborListView(APIView):
             status="accepted"
         ).select_related("from_user__profile", "to_user__profile")
 
-        neighbor_list = [
-            {
-                "urlname": (neighbor.to_user.profile if neighbor.from_user == profile.user else neighbor.from_user.profile).urlname,
-                "user_pic": (neighbor.to_user.profile if neighbor.from_user == profile.user else neighbor.from_user.profile).user_pic.url if (neighbor.to_user.profile if neighbor.from_user == profile.user else neighbor.from_user.profile).user_pic else None
-            }
-            for neighbor in neighbors
-        ]
+        neighbor_list = []
+        for neighbor in neighbors:
+            neighbor_user = neighbor.to_user if neighbor.from_user == profile.user else neighbor.from_user
+
+            # ✅ `username` 추가
+            neighbor_list.append({
+                "urlname": neighbor_user.profile.urlname,
+                "username": neighbor_user.profile.username,  # ✅ 여기 추가
+                "user_pic": neighbor_user.profile.user_pic.url if neighbor_user.profile.user_pic else None
+            })
 
         return Response({
             "urlname": profile.urlname,
             "neighbors": neighbor_list
         }, status=status.HTTP_200_OK)
+
 
 
 class MyNeighborListView(ListAPIView):
@@ -316,7 +321,8 @@ class MyNeighborListView(ListAPIView):
                                 properties={
                                     "urlname": openapi.Schema(type=openapi.TYPE_STRING, description="서로이웃 사용자의 URL 이름"),
                                     "username": openapi.Schema(type=openapi.TYPE_STRING, description="서로이웃 사용자의 닉네임"),
-                                    "user_pic": openapi.Schema(type=openapi.TYPE_STRING, format="url", description="프로필 이미지 URL"),
+                                    "user_pic": openapi.Schema(type=openapi.TYPE_STRING, format="url",
+                                                               description="프로필 이미지 URL"),
                                 }
                             )
                         ),
@@ -328,35 +334,35 @@ class MyNeighborListView(ListAPIView):
         }
     )
     def get(self, request):
-        """
-        ✅ 로그인한 사용자의 서로이웃 목록을 조회합니다.
-        """
-        profile = get_object_or_404(Profile, user=request.user)
+        """ 로그인한 사용자의 서로이웃 목록을 조회합니다. """
 
-        # ✅ `Neighbor` 모델을 사용하여 서로이웃 관계 조회
+        # ✅ Neighbor 모델에서 accepted된 이웃 목록 조회
         neighbors = Neighbor.objects.filter(
             Q(from_user=request.user) | Q(to_user=request.user),
             status="accepted"
-        ).select_related("from_user__profile", "to_user__profile")
+        ).select_related("from_user__profile", "to_user__profile")  # ✅ Profile을 한 번에 가져오기
 
+        # ✅ 서로이웃 목록 데이터 구성
         neighbor_list = []
         for neighbor in neighbors:
-            if neighbor.from_user == request.user:
-                neighbor_profile = neighbor.to_user.profile  # ✅ `to_user`의 Profile 가져오기
-            else:
-                neighbor_profile = neighbor.from_user.profile  # ✅ `from_user`의 Profile 가져오기
+            neighbor_user = neighbor.to_user if neighbor.from_user == request.user else neighbor.from_user
 
-            neighbor_list.append({
-                "urlname": neighbor_profile.urlname,  # ✅ 반환 값에 `urlname` 포함
-                "username": neighbor_profile.username,  # ✅ 사용자가 볼 수 있도록 `username` 포함
-                "user_pic": neighbor_profile.user_pic.url if neighbor_profile.user_pic else None
-            })
+            # ✅ `neighbor_user`가 `profile`을 가지고 있는지 확인
+            if hasattr(neighbor_user, 'profile'):  # ✅ 프로필이 존재하는 경우만 처리
+                neighbor_list.append({
+                    "urlname": neighbor_user.profile.urlname,  # ✅ urlname 가져오기
+                    "username": neighbor_user.profile.username,  # ✅ username 추가
+                    "user_pic": neighbor_user.profile.user_pic.url if neighbor_user.profile.user_pic else None
+                    # ✅ 프로필 이미지 URL
+                })
 
-        response_data = {"neighbors": neighbor_list}
-        if not neighbor_list:
-            response_data["message"] = "서로이웃이 없습니다."
+        return Response(
+            {"neighbors": neighbor_list} if neighbor_list else {"message": "서로이웃이 없습니다."},
+            status=status.HTTP_200_OK
+        )
 
-        return Response(response_data, status=status.HTTP_200_OK)
+
+
 
 
 class MyNeighborDeleteView(APIView):

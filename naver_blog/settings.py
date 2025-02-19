@@ -146,6 +146,9 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',  # 🔥 JSON만 반환하도록 설정
+    )
 }
 # SimpleJWT 설정
 from datetime import timedelta
@@ -196,3 +199,5 @@ CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH","OPTIONS"]
 
 # 특정 헤더 허용 (authorization 추가)
 CORS_ALLOW_HEADERS = ["*"]
+
+

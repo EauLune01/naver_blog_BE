@@ -14,8 +14,8 @@ class NeighborSerializer(serializers.ModelSerializer):
     # ✅ 서로이웃 목록을 반환할 때 추가할 필드
     from_urlname = serializers.CharField(source="from_user.profile.urlname", read_only=True)  # 신청한 사용자의 URL 이름
     to_urlname = serializers.CharField(source="to_user.profile.urlname", read_only=True)  # 신청 대상 사용자의 URL 이름
-    from_username = serializers.CharField(source="from_user.profile.username", read_only=True)  # 신청한 사용자의 닉네임
-    to_username = serializers.CharField(source="to_user.profile.username", read_only=True)  # 신청 대상 사용자의 닉네임
+    urlname = serializers.CharField(source="to_user.profile.urlname", read_only=True)  # ✅ urlname 추가
+    username = serializers.CharField(source="to_user.profile.username", read_only=True)  # ✅ username 추가
     from_user_pic = serializers.SerializerMethodField()  # 신청한 사용자의 프로필 사진 URL
     to_user_pic = serializers.SerializerMethodField()  # 신청 대상 사용자의 프로필 사진 URL
 
@@ -97,3 +97,4 @@ class NeighborSerializer(serializers.ModelSerializer):
                 to_profile.neighbors.add(from_profile)
 
         return instance
+
