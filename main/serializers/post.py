@@ -1,29 +1,34 @@
+import re
 from rest_framework import serializers
 from main.models.post import Post, PostImage
 from main.models.category import Category
-import re
 
 
 class PostImageSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField()
-
     class Meta:
         model = PostImage
-        fields = ['id', 'image', 'image_url']
+        fields = ['id', 'image', 'caption', 'is_representative']
 
-    def get_image_url(self, obj):
-        return obj.image.url if obj.image else None
+    def to_representation(self, instance):
+        """
+        ✅ 이미지 URL, 캡션, 대표사진 여부를 포함한 데이터 반환
+        """
+        representation = super().to_representation(instance)
+        if instance.image:
+            representation['image_url'] = instance.image.url
+        return representation
 
 
 class PostSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(source='user.profile.username', read_only=True)  # ✅ user_name 필드 추가
+    user_name = serializers.CharField(source='user.profile.username', read_only=True)
     visibility = serializers.ChoiceField(choices=Post.VISIBILITY_CHOICES, required=False)
     keyword = serializers.CharField(read_only=True)
     subject = serializers.ChoiceField(choices=Post.SUBJECT_CHOICES, required=False, default="주제 선택 안 함")
     total_likes = serializers.IntegerField(source="like_count", read_only=True)
     total_comments = serializers.IntegerField(source="comment_count", read_only=True)
-    category_name = serializers.SerializerMethodField()  # ✅ `source="category.name"` → `get_category_name()`
+    category_name = serializers.SerializerMethodField()
     images = PostImageSerializer(many=True, read_only=True)
+    content = serializers.SerializerMethodField()  # 🔥 `content` 필드를 수정하여 반환
 
     class Meta:
         model = Post
@@ -34,70 +39,57 @@ class PostSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user_name', 'created_at', 'updated_at', 'keyword', 'images']
 
     def get_category_name(self, obj):
-        """ ✅ `category.name`이 없을 경우 기본값 '게시판'을 반환 """
         return obj.category.name if obj.category else "게시판"
 
-    def extract_image_urls(self, content):
-        """ ✅ HTML `content`에서 `<img>` 태그의 `src` 속성을 찾아 반환 """
-        return re.findall(r'<img\s+[^>]*src=["\']([^"\']+)["\']', content)
+    def get_content(self, obj):
+        """
+        ✅ `content` 내 `<input>` 태그를 제거하고 `caption`을 적용한 최종 HTML 반환
+        """
+        content = obj.content
+        images = obj.images.all()  # 게시물의 모든 이미지 가져오기
 
-    def validate_category_name(self, value):
-        """ ✅ 카테고리 유효성 검사 """
-        if not Category.objects.filter(name=value).exists():
-            raise serializers.ValidationError(f"'{value}'은(는) 유효한 카테고리가 아닙니다.")
-        return value
+        for image in images:
+            # 🔥 <figcaption> 내부의 <input> 태그를 이미지의 실제 캡션으로 변환
+            input_pattern = f'<input[^>]*id="caption_{image.id}"[^>]*>'
+            caption_text = image.caption if image.caption else ""
+            content = re.sub(input_pattern, caption_text, content)
+
+            # 🔥 content 내 <img> 태그 URL을 절대 URL로 변경
+            if image.image:
+                content = content.replace(image.image.url, image.image.url)
+
+        return content
 
     def create(self, validated_data):
-        """ ✅ 게시물 생성 시 `category_name`을 `category`로 변환 """
-        category_name = validated_data.pop('category_name', '게시판')
+        request = self.context.get('request')
+        category_name = request.data.get('category_name', '게시판')
 
-        # ✅ `get_or_create()`를 사용하여 없으면 자동 생성
-        category, _ = Category.objects.get_or_create(name=category_name)
+        try:
+            category = request.user.categories.get(name=category_name)
+        except Category.DoesNotExist:
+            raise serializers.ValidationError(f"'{category_name}'은(는) 유효한 카테고리가 아닙니다.")
+
         validated_data['category'] = category
-
         post = Post.objects.create(**validated_data)
 
-        # ✅ 본문에서 이미지 URL 추출 후 PostImage 생성
-        image_urls = self.extract_image_urls(post.content)
-        for url in image_urls:
-            PostImage.objects.create(post=post, image=url)
+        from main.utils import save_images_from_request
+        save_images_from_request(post, request)
 
         return post
 
     def update(self, instance, validated_data):
-        """ ✅ 게시물 업데이트 로직 """
         instance.title = validated_data.get('title', instance.title)
         instance.content = validated_data.get('content', instance.content)
         instance.status = validated_data.get('status', instance.status)
 
-        # ✅ `category_name`이 변경되었을 경우 업데이트
-        category_name = validated_data.get('category_name', instance.category.name)
+        request = self.context.get('request')
+        category_name = request.data.get('category_name', instance.category.name)
         if category_name:
-            category, _ = Category.objects.get_or_create(name=self.validate_category_name(category_name))
-            instance.category = category
-
-        # ✅ 기존 본문의 이미지 URL & 새로운 본문의 이미지 URL 비교 후 삭제/추가
-        old_image_urls = set(self.extract_image_urls(instance.content))
-        new_image_urls = set(self.extract_image_urls(validated_data.get("content", instance.content)))
-
-        stored_images = PostImage.objects.filter(post=instance)
-        stored_image_urls = set(img.image for img in stored_images)
-
-        images_to_delete = stored_image_urls - new_image_urls
-        PostImage.objects.filter(post=instance, image__in=images_to_delete).delete()
-
-        images_to_add = new_image_urls - stored_image_urls
-        for url in images_to_add:
-            PostImage.objects.create(post=instance, image=url)
+            try:
+                category = request.user.categories.get(name=category_name)
+                instance.category = category
+            except Category.DoesNotExist:
+                raise serializers.ValidationError(f"'{category_name}'은(는) 유효한 카테고리가 아닙니다.")
 
         instance.save()
         return instance
-
-
-
-
-
-
-
-
-

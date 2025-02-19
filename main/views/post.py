@@ -97,7 +97,7 @@ class PostListView(ListAPIView):
         if pk:
             queryset = queryset.filter(pk=pk)
 
-        return queryset
+        return queryset.order_by('-created_at')  # 🔥 최신순 정렬 추가
 
     @swagger_auto_schema(
         operation_summary="게시물 목록 조회",
@@ -165,9 +165,11 @@ class PostCreateView(CreateAPIView):
         category_name = request.data.get('category_name')  # ✅ 카테고리 이름으로 선택
         subject = request.data.get('subject', '주제 선택 안 함')
         content = request.data.get('content', '')
-        post_status = request.data.get('status', 'draft')# ✅ Post 모델의 status 사용
+        post_status = request.data.get('status', 'published') # ✅ Post 모델의 status 사용
         visibility = request.data.get('visibility', 'everyone')  # ✅ visibility 추가
         created_at = request.data.get('created_at')  # ✅ created_at 추가
+        captions = json.loads(request.data.get('captions', '[]'))
+        is_representative = json.loads(request.data.get('is_representative', '[]'))
 
         if not title:
             return Response({"error": "제목은 필수 항목입니다."}, status=400)
@@ -180,6 +182,8 @@ class PostCreateView(CreateAPIView):
         else:
             category = user.categories.first()  # ✅ 변경된 부분
 
+        print(request.data.get('captions'))
+
         post = Post.objects.create(
             user=user,  # ✅ 변경된 부분
             title=title,
@@ -191,18 +195,22 @@ class PostCreateView(CreateAPIView):
             created_at = created_at or timezone.now()  # 기본값 설정
         )
 
-        # 이미지 저장 saveimageutil 함수를 불러와서 적용한다.
-        # 작업 내용 : 다중 이미지 저장, 캡션, 대표사진 여부 저장, BASE64 인코딩 후 url 변경
         save_images_from_request(post, request)
 
+
+        print("✅ 게시물 생성 완료:", post)
+
+        # ✅ 이미지 저장 처리
         serializer = PostSerializer(post)
 
-        if post_status == 'published':
+        if post_status == "published":
             return Response({"message": "게시물이 성공적으로 생성되었습니다.", "post": serializer.data}, status=201)
-        elif post_status == 'draft':
+        elif post_status == "draft":
             return Response({"message": "게시물이 임시 저장되었습니다.", "post": serializer.data}, status=201)
         else:
             return Response({"error": "게시물 상태가 유효하지 않습니다."}, status=400)
+
+
 
 
 class PostMyView(ListAPIView):
@@ -228,6 +236,8 @@ class PostMyView(ListAPIView):
         # ✅ 특정 pk의 게시물 조회
         if pk:
             queryset = queryset.filter(pk=pk)
+
+        queryset = queryset.order_by('-created_at')
 
         return queryset
 
@@ -342,7 +352,7 @@ class PostMyRecentView(RetrieveAPIView):
         serializer = self.get_serializer(instance)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class PostMutualView(ListAPIView):
+class PostMutualListView(ListAPIView):
     """
     ✅ 최근 1주일 내 작성된 '서로 이웃 공개' 게시물을 조회하는 API
     - `visibility='mutual'` 또는 `visibility='everyone'`인 게시물만 조회
@@ -386,6 +396,46 @@ class PostMutualView(ListAPIView):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PostMutualDetailView(RetrieveAPIView):
+
+    permission_classes=[IsAuthenticated]
+    serializer_class=PostSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # ✅ 서로이웃 ID 리스트 가져오기
+        from_neighbors = list(
+            Neighbor.objects.filter(from_user=user, status="accepted").values_list('to_user', flat=True)
+        )
+        to_neighbors = list(
+            Neighbor.objects.filter(to_user=user, status="accepted").values_list('from_user', flat=True)
+        )
+        neighbor_ids = set(from_neighbors + to_neighbors)
+        neighbor_ids.discard(user.id)  # ✅ 본인 ID 제거
+
+        # ✅ 서로이웃 + 전체 공개 글만 필터링
+        queryset = Post.objects.filter(
+            Q(user_id__in=neighbor_ids) &  # ✅ 서로이웃이 작성한 글
+            Q(visibility__in=['mutual', 'everyone']) &  # ✅ '서로이웃 공개' or '전체 공개'
+            Q(status="published")  # ✅ 'published' 상태의 글만
+        ).exclude(user=user)  # ✅ 본인 게시물 제외
+
+        return queryset
+
+    @swagger_auto_schema(
+        operation_summary="서로이웃 게시물 상세 조회",
+        operation_description="서로이웃 또는 전체 공개 게시물의 상세 정보를 조회합니다.",
+        responses={200: PostSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        post = get_object_or_404(queryset, id=self.kwargs["pk"])
+        serializer = self.get_serializer(post)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class PostDetailView(RetrieveAPIView):
     """

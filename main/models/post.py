@@ -1,18 +1,14 @@
+import uuid
+import os
 from django.db import models
 from django.conf import settings
-from slugify import slugify
 from ..models.category import Category
 
-
+# ✅ UUID 기반 이미지 경로 생성 함수
 def image_upload_path(instance, filename):
-    """
-    ✅ 이미지 업로드 경로 설정
-    - 경로: post_pics/{post_id}/{filename}
-    """
-    post_id = instance.post.id or "unknown"  # post.id 사용
     ext = filename.split('.')[-1]  # 확장자 추출
-    filename = f"{post_id}_{instance.pk}.{ext}"  # '게시물ID_이미지ID.확장자' 형식
-    return os.path.join("post_pics", str(post_id), filename)
+    unique_name = uuid.uuid4().hex  # 유니크한 이름 생성
+    return os.path.join("post_pics", str(instance.post.id), f"{unique_name}.{ext}")
 
 
 class Post(models.Model):
@@ -104,7 +100,7 @@ class PostImage(models.Model):
     ✅ 게시물에 포함된 이미지 저장 모델
     """
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to=image_upload_path)  # ✅ post.id 기반 이미지 저장
+    image = models.ImageField(upload_to=image_upload_path)  # ✅ UUID 기반 경로 적용
     image_url = models.URLField(blank=True, null=True)  # ✅ HTML 본문 내 이미지 URL
     caption = models.CharField(max_length=255, blank=True, null=True)
     is_representative = models.BooleanField(default=False, verbose_name="대표 사진 여부")
@@ -113,6 +109,8 @@ class PostImage(models.Model):
         """
         ✅ 이미지 저장 시 자동으로 image_url 설정
         """
+        if not self.post.id:
+            self.post.save()  # ✅ post.id가 없으면 먼저 저장
         super().save(*args, **kwargs)
         if not self.image_url and self.image:
             self.image_url = self.image.url  # ✅ 경로에 맞춰 URL 자동 반영

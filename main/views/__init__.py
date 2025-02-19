@@ -3,7 +3,7 @@ from .profile import ProfileDetailView,ProfilePublicView,ProfileUrlnameUpdateVie
 from .login import LoginView
 from .logout import LogoutView
 from .account import PasswordUpdateView
-from .post import PostListView,PostCreateView,PostMyView,PostMyCurrentView,PostMyDetailView,PostMyRecentView,PostMutualView,PostDetailView,PostManageView,DraftPostListView,DraftPostDetailView
+from .post import PostListView,PostCreateView,PostMyView,PostMyCurrentView,PostMyDetailView,PostMyRecentView,PostMutualListView,PostMutualDetailView,PostDetailView,PostManageView,DraftPostListView,DraftPostDetailView
 from .comment import CommentListView,CommentDetailView
 from .heart import ToggleHeartView, PostHeartUsersView,PostHeartCountView
 from .commentHeart import ToggleCommentHeartView,CommentHeartCountView

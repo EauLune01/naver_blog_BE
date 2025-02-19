@@ -23,7 +23,7 @@ from main.views.login import LoginView
 from main.views.logout import LogoutView
 from main.views.account import PasswordUpdateView
 from main.views.profile import ProfileDetailView, ProfilePublicView, ProfileUrlnameUpdateView
-from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMyRecentView,PostMutualView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView, PostMyCurrentView, PostPublicCurrentView, PostCountView
+from main.views.post import PostDetailView,PostMyView,PostMyDetailView,PostMyRecentView,PostMutualListView,PostMutualDetailView,PostManageView,PostListView,PostCreateView,DraftPostListView,DraftPostDetailView, PostMyCurrentView, PostPublicCurrentView, PostCountView
 from main.views.category import CategoryListView,CategoryDetailView,MyCategoryListView,MyCategoryDetailView
 from main.views.comment import CommentListView, CommentDetailView
 from main.views.heart import ToggleHeartView, PostHeartUsersView, PostHeartCountView
@@ -106,8 +106,8 @@ urlpatterns = [
     path('posts/<str:urlname>/current/', PostPublicCurrentView.as_view(), name='post-public-recent'),
 
     #서로 이웃 새글 API
-    path('posts/mutual/recentweekly', PostMutualView.as_view(), name='post-mutual'),
-
+    path('posts/mutual/recentweekly/', PostMutualListView.as_view(), name='post-mutual-list'),
+    path('posts/mutual/recentweekly/<int:pk>/',PostMutualDetailView.as_view(),name='post-mutual-detail'),
     #임시 저장된 게시물 관련 API
     path('posts/drafts/', DraftPostListView.as_view(), name='draft_post_list'),  # 임시 저장된 게시물 목록 조회
     path('posts/drafts/<int:pk>/', DraftPostDetailView.as_view(), name='draft_post_detail'),  # 임시 저장된 게시물 상세 조회

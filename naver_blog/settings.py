@@ -172,6 +172,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'main/media')
 # MEDIA_URL: 브라우저에서 파일에 접근할 때 사용할 경로
 MEDIA_URL = '/media/'
 
+
+
 SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
     'SECURITY_DEFINITIONS': {
