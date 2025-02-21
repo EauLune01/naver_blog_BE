@@ -34,7 +34,6 @@ def get_excerpt(text, keyword, context_length=30):
 
     return text[start:end] + ("..." if end < len(text) else "")
 
-
 class BlogPostSearchView(APIView):
     """
     특정 블로그 내에서 게시글을 검색하는 API
@@ -42,7 +41,7 @@ class BlogPostSearchView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @swagger_auto_schema(
-        operation_summary = "특정 블로그 게시물 검색",
+        operation_summary="특정 블로그 게시물 검색",
         operation_description="특정 블로그 내에서 게시물을 검색합니다.",
         manual_parameters=[
             openapi.Parameter('urlname', openapi.IN_QUERY, description="블로그 식별자 (사용자 프로필 URL 식별자)",
@@ -71,42 +70,40 @@ class BlogPostSearchView(APIView):
 
         # 🔹 제목 검색 (나만 보기, 서로 이웃 필터링)
         title_matches = Post.objects.filter(
-            Q(title__icontains=search_keyword) & Q(author=blog_owner) & ~Q(visibility='me')
+            Q(title__icontains=search_keyword) & Q(user=blog_owner) & ~Q(visibility='me')
         )
 
         # 🔹 본문 검색 (나만 보기, 서로 이웃 필터링)
-        content_matches = PostText.objects.filter(
-            Q(content__icontains=search_keyword) & Q(post__author=blog_owner) & ~Q(post__visibility='me')
-        ).select_related('post')
+        content_matches = Post.objects.filter(
+            Q(content__icontains=search_keyword) & Q(user=blog_owner) & ~Q(visibility='me')
+        )
 
         # 🔹 이미지 캡션 검색 (나만 보기, 서로 이웃 필터링)
         caption_matches = PostImage.objects.filter(
-            Q(caption__icontains=search_keyword) & Q(post__author=blog_owner) & ~Q(post__visibility='me')
+            Q(caption__icontains=search_keyword) & Q(post__user=blog_owner) & ~Q(post__visibility='me')
         ).select_related('post')
 
         # 🔹 검색된 게시물 ID 저장 (중복 제거)
         matched_post_ids = (
             set(title_matches.values_list('id', flat=True))
-            | set(content_matches.values_list('post_id', flat=True))
+            | set(content_matches.values_list('id', flat=True))  # 수정된 부분
             | set(caption_matches.values_list('post_id', flat=True))  # 🔹 이미지 설명 포함
         )
 
         # 🔹 검색된 게시물 조회 (서로 이웃 필터링 적용)
-        posts = Post.objects.filter(id__in=matched_post_ids).prefetch_related('texts', 'images', 'author')
+        posts = Post.objects.filter(id__in=matched_post_ids).prefetch_related('images', 'user')
 
         results = []
         for post in posts:
-            if post.visibility == 'mutual' and not is_mutual_friend(user, post.author):
+            if post.visibility == 'mutual' and not is_mutual_friend(user, post.user):
                 continue  # 서로 이웃이 아닐 경우 검색 결과에서 제외
 
             thumbnail = post.images.filter(is_representative=True).first()
             thumbnail_url = thumbnail.image.url if thumbnail else None
 
             excerpt = ""
-            for text in post.texts.all():
-                if search_keyword.lower() in text.content.lower():
-                    excerpt = get_excerpt(text.content, search_keyword)
-                    break
+            if search_keyword.lower() in post.content.lower():  # 본문에서 검색어가 있는지 확인
+                excerpt = get_excerpt(post.content, search_keyword)
 
             results.append({
                 "title": post.title,
@@ -150,7 +147,7 @@ class GlobalBlogSearchView(APIView):
 
         results = [
             {
-                "username": profile.user.username,
+                "username": profile.username,
                 "urlname": profile.urlname,
                 "blog_name": profile.blog_name,
                 "intro": profile.intro,  # 🔹 블로그 한 줄 소개 추가
@@ -227,8 +224,6 @@ class GlobalNickAndIdSearchView(APIView):
 
         return Response({"users": results})
 
-
-
 class GlobalPostSearchView(APIView):
     """
     전체 블로그에서 게시글을 검색하는 API
@@ -272,15 +267,15 @@ class GlobalPostSearchView(APIView):
         matched_post_ids.update(title_matches.values_list('id', flat=True))
 
         # 🔹 2. 본문에서 검색 (중복 방지 & 전체 공개 필터링)
-        content_matches = PostText.objects.filter(
-            Q(content__icontains=search_keyword) & Q(post__visibility='everyone')
-        ).select_related('post')
+        content_matches = Post.objects.filter(
+            Q(content__icontains=search_keyword) & Q(visibility='everyone')
+        )
 
-        for text in content_matches:
-            post_id = text.post.id
+        for post in content_matches:
+            post_id = post.id
             matched_post_ids.add(post_id)
             if post_id not in excerpts:
-                excerpts[post_id] = get_excerpt(text.content, search_keyword)  # ✅ 기존 함수 사용
+                excerpts[post_id] = get_excerpt(post.content, search_keyword)  # ✅ 기존 함수 사용
 
         # 🔹 3. 이미지 캡션에서 검색 (중복 방지 & 전체 공개 필터링)
         caption_matches = PostImage.objects.filter(
@@ -294,17 +289,18 @@ class GlobalPostSearchView(APIView):
                 excerpts[post_id] = get_excerpt(image.caption, search_keyword)  # ✅ 기존 함수 사용
 
         # 🔹 4. 검색된 게시물 조회 (중복 제거됨)
-        posts = Post.objects.filter(id__in=matched_post_ids).select_related('author__profile')
+        posts = Post.objects.filter(id__in=matched_post_ids).select_related('user__profile')
 
         results = []
         for post in posts:
-            profile = post.author.profile
+            profile = post.user.profile  # 변경된 부분: `post.author.profile` -> `post.user.profile`
             results.append({
                 "title": post.title,
-                "username": post.author.username,
-                "blog_name": profile.blog_name,
+                "username": post.user.username,  # 변경된 부분: `post.author.username` -> `post.user.username`
+                "blog_name": profile.blog_name,  # 변경된 부분: `post.author.profile.blog_name` -> `post.user.profile.blog_name`
                 "created_at": post.created_at.strftime("%Y-%m-%d %H:%M"),
                 "excerpt": excerpts.get(post.id, post.title)  # 🔹 기본값: 제목
             })
 
         return Response({"posts": results})
+
