@@ -385,7 +385,8 @@ class PostMutualListView(ListAPIView):
             Q(created_at__gte=one_week_ago)  # ✅ 최근 7일 이내 작성된 글
         ).exclude(user=user)  # ✅ 본인 게시물 제외
 
-        return queryset
+        # ✅ 최신순 정렬 추가
+        return queryset.order_by('-created_at')
 
     @swagger_auto_schema(
         operation_summary="서로이웃 게시물 목록 조회",

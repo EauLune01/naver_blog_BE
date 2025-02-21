@@ -29,14 +29,15 @@ class PostSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     images = PostImageSerializer(many=True, read_only=True)
     content = serializers.SerializerMethodField()  # 🔥 `content` 필드를 수정하여 반환
+    url_name = serializers.CharField(source='user.profile.urlname', read_only=True)  # 🔥 user.profile.urlname을 urlname으로 반환
 
     class Meta:
         model = Post
         fields = [
-            'id', 'user_name', 'title', 'content', 'status', 'category_name', 'subject', 'keyword',
+            'id', 'user_name', 'url_name','title', 'content', 'status', 'category_name', 'subject', 'keyword',
             'visibility', 'images', 'created_at', 'updated_at', 'total_likes', 'total_comments'
         ]
-        read_only_fields = ['id', 'user_name', 'created_at', 'updated_at', 'keyword', 'images']
+        read_only_fields = ['id', 'user_name', 'url_name','created_at', 'updated_at', 'keyword', 'images']
 
     def get_category_name(self, obj):
         return obj.category.name if obj.category else "게시판"
