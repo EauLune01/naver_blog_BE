@@ -83,7 +83,10 @@ class PostHeartUsersView(generics.RetrieveAPIView):
                         items=openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                "username": openapi.Schema(type=openapi.TYPE_STRING, description="유저 이름")
+                                "username": openapi.Schema(type=openapi.TYPE_STRING, description="유저 이름"),
+                                "urlname": openapi.Schema(type=openapi.TYPE_STRING, description="유저 URL 이름"),
+                                "user_pic": openapi.Schema(type=openapi.TYPE_STRING, description="유저 프로필 사진 URL"),
+                                "blog_name": openapi.Schema(type=openapi.TYPE_STRING, description="블로그 이름"),
                             }
                         ),
                         description="좋아요(하트)를 누른 유저 목록"
@@ -100,14 +103,25 @@ class PostHeartUsersView(generics.RetrieveAPIView):
         if post.visibility == 'me' and post.user != user:
             return Response({"error": "이 게시글의 좋아요 유저 목록을 조회할 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
-        # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 하트 목록 조회 가능 (is_mutual 대신 neighbors 사용)
+        # ✅ '서로 이웃 공개' 게시글이면 서로 이웃만 하트 목록 조회 가능
         if post.visibility == 'mutual' and not post.user.profile.neighbors.filter(id=user.profile.id).exists():
             return Response({"error": "서로 이웃만 이 게시글의 좋아요 유저 목록을 조회할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN)
 
-        hearts = Heart.objects.filter(post=post).select_related('user__profile')  # ✅ profile까지 join
-        liked_users = [{"username": heart.user.profile.username} for heart in hearts]  # ✅ 프로필의 username 사용
+        # ✅ Heart 테이블에서 해당 게시글을 좋아요한 유저 정보 가져오기
+        hearts = Heart.objects.filter(post=post).select_related('user__profile')  # profile까지 join
+        liked_users = [
+            {
+                "username": heart.user.profile.username,  # ✅ username 반환
+                "urlname": heart.user.profile.urlname,  # ✅ urlname 반환
+                "user_pic": heart.user.profile.user_pic.url, # user_pic 반환
+                "blog_name": heart.user.profile.blog_name  # ✅ blog_name 추가
+            }
+            for heart in hearts
+        ]
 
         return Response({"liked_users": liked_users}, status=status.HTTP_200_OK)
+
+
 
 
 class PostHeartCountView(generics.RetrieveAPIView):
