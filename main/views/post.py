@@ -487,7 +487,7 @@ class PostManageView(UpdateAPIView, DestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Post.objects.filter(author=user)  # ✅ 본인이 작성한 게시물만 수정/삭제 가능
+        return Post.objects.filter(user=user)  # ✅ 본인이 작성한 게시물만 수정/삭제 가능
 
     @swagger_auto_schema(
         operation_summary="게시물 전체 수정 (사용 불가)",

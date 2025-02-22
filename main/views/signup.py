@@ -35,10 +35,11 @@ class SignupView(APIView):
         if serializer.is_valid():
             user = serializer.save()
 
-            # ✅ '게시판' 카테고리 자동 추가
-            category, _ = Category.objects.get_or_create(name='게시판')
-            user.categories.add(category)
+            # ✅ 사용자별로 개별적인 '게시판' 카테고리 생성
+            Category.objects.get_or_create(name="게시판", user=user)
 
             return Response({"message": "회원가입이 완료되었습니다."}, status=status.HTTP_201_CREATED)
 
         return Response({"message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+

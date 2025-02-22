@@ -34,9 +34,6 @@ class CustomUser(AbstractUser):
     last_name = None
     email = None
 
-    # ✅ 한 명의 유저는 여러 개의 카테고리를 가질 수 있음 (ManyToMany 관계 유지)
-    categories = models.ManyToManyField(Category, related_name="users", blank=True)
-
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'id'

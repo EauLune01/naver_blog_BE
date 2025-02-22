@@ -105,11 +105,12 @@ class MyCategoryListView(generics.ListCreateAPIView):
     ✅ 내 카테고리만 조회 (GET /category/)
     ✅ 새로운 카테고리 추가 (POST /category/)
     """
+    permission_classes = [IsAuthenticated]  # ✅ 로그인한 사용자만 접근 가능
     serializer_class = CategorySerializer
 
     def get_queryset(self):
         """ 🔹 현재 로그인한 사용자의 카테고리만 조회 """
-        return self.request.user.categories.all()  # ✅ ManyToMany 관계 사용
+        return Category.objects.filter(user=self.request.user)  # ✅ ManyToManyField 사용하지 않음
 
     @swagger_auto_schema(
         operation_summary="내 카테고리 조회",
@@ -132,10 +133,10 @@ class MyCategoryListView(generics.ListCreateAPIView):
         """ ✅ 새로운 카테고리 추가 (30글자 제한) """
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            category = serializer.save()  # ✅ 새로운 카테고리 저장
-            request.user.categories.add(category)  # ✅ 현재 유저와 ManyToMany 관계 설정
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            category = Category.objects.create(user=request.user, name=serializer.validated_data["name"])  # ✅ ForeignKey로 생성
+            return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class MyCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -143,11 +144,12 @@ class MyCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     ✅ 내 특정 카테고리 수정 (PATCH /categories/<id>/)
     ✅ 내 특정 카테고리 삭제 (DELETE /categories/<id>/, 단 '게시판' 삭제 불가)
     """
+    permission_classes = [IsAuthenticated]  # ✅ 로그인한 사용자만 접근 가능
     serializer_class = CategorySerializer
 
     def get_queryset(self):
         """ 🔹 현재 로그인한 사용자의 카테고리만 조회 """
-        return self.request.user.categories.all()  # ✅ ManyToMany 관계 사용
+        return Category.objects.filter(user=self.request.user)  # ✅ ManyToManyField 제거
 
     @swagger_auto_schema(
         operation_summary="내 특정 카테고리 조회",
