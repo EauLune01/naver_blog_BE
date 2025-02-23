@@ -34,6 +34,7 @@ def get_excerpt(text, keyword, context_length=30):
 
     return text[start:end] + ("..." if end < len(text) else "")
 
+
 class BlogPostSearchView(APIView):
     """
     특정 블로그 내에서 게시글을 검색하는 API
@@ -68,17 +69,17 @@ class BlogPostSearchView(APIView):
 
         user = request.user  # 현재 검색을 요청한 사용자
 
-        # 🔹 제목 검색 (나만 보기, 서로 이웃 필터링)
+        # 🔹 제목 검색 (나만 보기 필터링)
         title_matches = Post.objects.filter(
             Q(title__icontains=search_keyword) & Q(user=blog_owner) & ~Q(visibility='me')
         )
 
-        # 🔹 본문 검색 (나만 보기, 서로 이웃 필터링)
+        # 🔹 본문 검색 (나만 보기 필터링)
         content_matches = Post.objects.filter(
             Q(content__icontains=search_keyword) & Q(user=blog_owner) & ~Q(visibility='me')
         )
 
-        # 🔹 이미지 캡션 검색 (나만 보기, 서로 이웃 필터링)
+        # 🔹 이미지 캡션 검색 (나만 보기 필터링)
         caption_matches = PostImage.objects.filter(
             Q(caption__icontains=search_keyword) & Q(post__user=blog_owner) & ~Q(post__visibility='me')
         ).select_related('post')
@@ -86,12 +87,12 @@ class BlogPostSearchView(APIView):
         # 🔹 검색된 게시물 ID 저장 (중복 제거)
         matched_post_ids = (
             set(title_matches.values_list('id', flat=True))
-            | set(content_matches.values_list('id', flat=True))  # 수정된 부분
+            | set(content_matches.values_list('id', flat=True))
             | set(caption_matches.values_list('post_id', flat=True))  # 🔹 이미지 설명 포함
         )
 
-        # 🔹 검색된 게시물 조회 (서로 이웃 필터링 적용)
-        posts = Post.objects.filter(id__in=matched_post_ids).prefetch_related('images', 'user')
+        # 🔹 검색된 게시물 조회 (서로 이웃 필터링 적용 + Profile 정보 포함)
+        posts = Post.objects.filter(id__in=matched_post_ids).prefetch_related('images', 'user__profile')
 
         results = []
         for post in posts:
@@ -105,14 +106,21 @@ class BlogPostSearchView(APIView):
             if search_keyword.lower() in post.content.lower():  # 본문에서 검색어가 있는지 확인
                 excerpt = get_excerpt(post.content, search_keyword)
 
+            # 🔹 프로필에서 username과 user_pic 가져오기
+            author_username = post.user.profile.username
+            author_user_pic = post.user.profile.user_pic.url
+
             results.append({
                 "title": post.title,
                 "created_at": post.created_at.strftime("%Y-%m-%d %H:%M"),
                 "thumbnail": thumbnail_url,
                 "excerpt": excerpt,
+                "username": author_username,  # ✅ username 추가
+                "user_pic": author_user_pic,  # ✅ user_pic 추가
             })
 
         return Response({"results": results})
+
 
 class GlobalBlogSearchView(APIView):
     """
@@ -296,7 +304,7 @@ class GlobalPostSearchView(APIView):
             profile = post.user.profile  # 변경된 부분: `post.author.profile` -> `post.user.profile`
             results.append({
                 "title": post.title,
-                "username": post.user.username,  # 변경된 부분: `post.author.username` -> `post.user.username`
+                "username": post.user.profile.username,  # 변경된 부분: `post.author.username` -> `post.user.username`
                 "blog_name": profile.blog_name,  # 변경된 부분: `post.author.profile.blog_name` -> `post.user.profile.blog_name`
                 "created_at": post.created_at.strftime("%Y-%m-%d %H:%M"),
                 "excerpt": excerpts.get(post.id, post.title)  # 🔹 기본값: 제목
