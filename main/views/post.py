@@ -210,9 +210,6 @@ class PostCreateView(CreateAPIView):
         else:
             return Response({"error": "게시물 상태가 유효하지 않습니다."}, status=400)
 
-
-
-
 class PostMyView(ListAPIView):
     """
     ✅ 로그인한 사용자가 작성한 모든 게시물 목록을 조회하는 API
@@ -482,216 +479,91 @@ class PostDetailView(RetrieveAPIView):
 class PostManageView(UpdateAPIView, DestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PostSerializer
-    queryset = Post.objects.all()  # ✅ 누락된 queryset 추가
-    parser_classes = [MultiPartParser, FormParser]  # ✅ 누락된 parser_classes 추가
+    queryset = Post.objects.all()
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        user = self.request.user
-        return Post.objects.filter(user=user)  # ✅ 본인이 작성한 게시물만 수정/삭제 가능
-
-    @swagger_auto_schema(
-        operation_summary="게시물 전체 수정 (사용 불가)",
-        operation_description="PUT 메서드는 허용되지 않습니다. 대신 PATCH를 사용하세요.",
-        responses={405: "PUT method is not allowed. Use PATCH instead."},
-    )
-    def put(self, request, *args, **kwargs):
-        return Response({"error": "PUT method is not allowed. Use PATCH instead."}, status=405)
+        return Post.objects.filter(user=self.request.user)
 
     @swagger_auto_schema(
         operation_summary="게시물 부분 수정 (PATCH)",
-        operation_description="게시물의 특정 필드만 수정합니다. 제공된 데이터만 업데이트됩니다.",
+        operation_description="기존 게시물을 덮어쓰기 방식으로 수정합니다. 기존 이미지는 전부 삭제되고, 새로운 이미지가 추가됩니다.",
         manual_parameters=[
             openapi.Parameter('title', openapi.IN_FORM, description='게시물 제목', type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('category', openapi.IN_FORM, description='카테고리', type=openapi.TYPE_STRING,
-                              required=False),
-            openapi.Parameter('visibility', openapi.IN_FORM, description='공개 범위', type=openapi.TYPE_STRING,
-                              enum=['everyone', 'mutual', 'me'], required=False),
-            openapi.Parameter('subject', openapi.IN_FORM, description='주제 (네이버 제공 소주제)', type=openapi.TYPE_STRING,
-                              enum=[choice[0] for choice in Post.SUBJECT_CHOICES], required=False),
-            openapi.Parameter('is_complete', openapi.IN_FORM,
-                              description='작성 상태 (true: 작성 완료, false: 임시 저장 → 변경 가능, 단 true → false 변경 불가)',
-                              type=openapi.TYPE_BOOLEAN, required=False),
-            openapi.Parameter('update_texts', openapi.IN_FORM, description='수정할 텍스트 ID 목록 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('remove_texts', openapi.IN_FORM, description='삭제할 텍스트 ID 목록 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('content', openapi.IN_FORM, description='수정할 텍스트 내용 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('font', openapi.IN_FORM, description='글씨체 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('font_size', openapi.IN_FORM, description='글씨 크기 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('is_bold', openapi.IN_FORM, description='글씨 굵기 배열 (JSON 형식)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('remove_images', openapi.IN_FORM, description='삭제할 이미지 ID 목록 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('update_images', openapi.IN_FORM, description='수정할 이미지 ID 목록 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('images', openapi.IN_FORM, description='이미지 파일 배열 (새 이미지 업로드)', type=openapi.TYPE_ARRAY,
-                              items=openapi.Items(type=openapi.TYPE_FILE), required=False),
-            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
-            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)',
-                              type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('content', openapi.IN_FORM, description='게시물 본문 (HTML 포함)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('category_name', openapi.IN_FORM, description='카테고리 이름', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('subject', openapi.IN_FORM, description='게시물 주제', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('visibility', openapi.IN_FORM, description='공개 범위', type=openapi.TYPE_STRING, enum=['everyone', 'mutual', 'me'], required=False),
+            openapi.Parameter('status', openapi.IN_FORM, description='게시물 상태 (published 또는 draft)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('captions', openapi.IN_FORM, description='이미지 캡션 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('is_representative', openapi.IN_FORM, description='대표 사진 여부 배열 (JSON 형식 문자열)', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('images', openapi.IN_FORM, description='새로 추가할 이미지 파일 배열', type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_FILE), required=False),
         ],
         responses={200: PostSerializer()},
     )
     def patch(self, request, *args, **kwargs):
         instance = self.get_object()
-
-        # ✅ subject 값 검증은 serializer에서 처리되므로 별도 검증 X
-        instance.subject = request.data.get('subject', instance.subject)
-
-        # ✅ `is_complete=True`인 게시물은 `False`로 변경할 수 없음
-        if "is_complete" in request.data:
-            new_is_complete = request.data["is_complete"] in [True, "true", "True", 1, "1"]
-            if instance.is_complete and not new_is_complete:
-                return Response({"error": "작성 완료된 게시물은 다시 임시 저장 상태로 변경할 수 없습니다."}, status=400)
-            instance.is_complete = new_is_complete  # ✅ Boolean 값 저장
-
-        # ✅ visibility 검증도 serializer에서 자동으로 처리됨 → 별도 검증 삭제
-        instance.visibility = request.data.get('visibility', instance.visibility)
+        user = request.user
 
         # ✅ 기본 필드 업데이트
-        instance.title = request.data.get('title', instance.title)
-        instance.category = request.data.get('category', instance.category)
+        instance.title = request.data.get("title", instance.title)
+        instance.content = request.data.get("content", instance.content)
+        instance.status = request.data.get("status", instance.status)
+        instance.visibility = request.data.get("visibility", instance.visibility)
+        instance.subject = request.data.get("subject", instance.subject)
+
+        # ✅ 카테고리 업데이트
+        category_name = request.data.get("category_name")
+        if category_name:
+            category = user.categories.filter(name=category_name).first()
+            if not category:
+                return Response({"error": f"'{category_name}'은(는) 존재하지 않는 카테고리입니다."}, status=400)
+            instance.category = category
+
+        instance.updated_at = now()
         instance.save()
 
-        # ✅ JSON 데이터 파싱 함수 (모든 JSON 필드를 안전하게 처리)
-        def parse_json_data(field):
-            try:
-                if isinstance(request.data, list):  # 🔥 리스트 자체가 들어왔을 때
-                    return request.data
-                elif isinstance(request.data.get(field), str):  # 기존 방식 (필드가 JSON 문자열일 때)
-                    return json.loads(request.data.get(field, "[]"))
-                elif isinstance(request.data.get(field), list):  # `field` 필드가 리스트일 때
-                    return request.data.get(field, [])
-                return []
-            except json.JSONDecodeError:
-                return []
+        # ✅ 기존 이미지 삭제 (전체 삭제 후 다시 추가)
+        instance.images.all().delete()
 
-        # ✅ 텍스트 수정 / 삭제
-        update_text_ids = parse_json_data('update_texts')
-        remove_text_ids = parse_json_data('remove_texts')
-        updated_contents = parse_json_data('content')
-        updated_fonts = parse_json_data('font')
-        updated_font_sizes = parse_json_data('font_size')
-        updated_is_bolds = parse_json_data('is_bold')
+        # ✅ 새로운 이미지 저장
+        save_images_from_request(instance, request)
 
-        # 기존 텍스트 삭제
-        PostText.objects.filter(id__in=remove_text_ids, post=instance).delete()
-
-        # 기존 텍스트 수정
-        for idx, text_id in enumerate(update_text_ids):
-            try:
-                text_obj = PostText.objects.get(id=text_id, post=instance)
-
-                if idx < len(updated_contents):
-                    text_obj.content = updated_contents[idx]
-                if idx < len(updated_fonts):
-                    text_obj.font = updated_fonts[idx]
-                if idx < len(updated_font_sizes):
-                    text_obj.font_size = updated_font_sizes[idx]
-                if idx < len(updated_is_bolds):
-                    text_obj.is_bold = updated_is_bolds[idx]
-
-                text_obj.save()
-            except PostText.DoesNotExist:
-                continue
-        # ✅ 새 텍스트 추가 (remove_texts와 update_texts가 비어있다면)
-        if not remove_text_ids and not update_text_ids:
-            for idx in range(len(updated_contents)):
-                PostText.objects.create(
-                    post=instance,
-                    content=updated_contents[idx],  # 필수
-                    font=updated_fonts[idx] if idx < len(updated_fonts) else "nanum_gothic",  # 기본값: 나눔고딕
-                    font_size=updated_font_sizes[idx] if idx < len(updated_font_sizes) else 15,  # 기본값: 15
-                    is_bold=updated_is_bolds[idx] if idx < len(updated_is_bolds) else False,  # 기본값: False
-                )
-
-        # ✅ 이미지 관련 데이터 가져오기
-        images = request.FILES.getlist('images')  # 새로 업로드된 이미지 파일 리스트
-        captions = parse_json_data('captions')  # 캡션 배열 (id 없음)
-        is_representative_flags = parse_json_data('is_representative')  # 대표 여부 배열 (id 없음)
-        remove_images = parse_json_data('remove_images')  # 삭제할 이미지 ID 배열
-        update_images = parse_json_data('update_images')  # 기존 이미지 ID 리스트
-
-        # ✅ 기존 이미지 삭제
-        PostImage.objects.filter(id__in=remove_images, post=instance).delete()
-
-        # ✅ 기존 이미지 수정 (ID 유지) - 업로드된 파일과 ID 매칭
-        for idx, image_id in enumerate(update_images):
-            try:
-                post_image = PostImage.objects.get(id=image_id, post=instance)
-
-                # ✅ 새로 업로드된 이미지가 있다면 교체
-                if idx < len(images):
-                    post_image.image.delete()  # 기존 이미지 삭제
-                    post_image.image = images[idx]  # 새로운 이미지 저장
-
-                # ✅ captions 리스트의 idx가 유효하다면 업데이트
-                if idx < len(captions):
-                    post_image.caption = captions[idx]
-
-                # ✅ is_representative 값도 업데이트
-                if idx < len(is_representative_flags):
-                    post_image.is_representative = is_representative_flags[idx]
-
-                post_image.save()
-            except PostImage.DoesNotExist:
-                continue  # 존재하지 않으면 무시
-
-        # ✅ 새 이미지 추가 (ID가 새로 생성됨)
-        for idx, image in enumerate(images[len(update_images):]):  # 기존 이미지 수정 후 남은 파일들
-            PostImage.objects.create(
-                post=instance,
-                image=image,
-                caption=captions[idx] if idx < len(captions) else None,
-                is_representative=is_representative_flags[idx] if idx < len(is_representative_flags) else False,
-            )
-
-        # ✅ 대표 이미지 중복 검사 및 자동 설정
-        representative_images = instance.images.filter(is_representative=True)
-        if representative_images.count() > 1:
-            return Response({"error": "대표 이미지는 한 개만 설정할 수 있습니다."}, status=400)
-
-        if representative_images.count() == 0 and instance.images.exists():
-            first_image = instance.images.first()
-            first_image.is_representative = True
-            first_image.save()
-
-        # ✅ 응답 반환
+        # ✅ 응답 반환 (업데이트된 게시물 데이터)
         serializer = PostSerializer(instance)
-        return Response(serializer.data, status=200)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    from django.shortcuts import get_object_or_404
+    from rest_framework.response import Response
+    from rest_framework import status
+    import os
 
     @swagger_auto_schema(
         operation_summary="게시물 삭제",
         operation_description="특정 게시물과 관련 이미지를 포함한 모든 데이터를 삭제합니다.",
-        responses={204: "삭제 성공"},
+        responses={204: "삭제 성공", 403: "권한 없음", 404: "게시물 없음"},
     )
     def delete(self, request, *args, **kwargs):
-        instance = self.get_object()
-        folder_path = None
+        """
+        ✅ 게시물 삭제 (보완 버전)
+        - 게시물 및 관련 이미지 삭제
+        """
+        instance = get_object_or_404(Post, id=kwargs.get("pk"))
 
-        # ✅ 폴더 경로 저장 (main/media/카테고리/제목)
-        if instance.images.exists():
-            folder_path = os.path.dirname(instance.images.first().image.path)
+        # ✅ 권한 체크
+        if instance.user != request.user:
+            return Response({"error": "게시물을 삭제할 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
 
-        # ✅ 관련 이미지 삭제
+        # ✅ 이미지 삭제 (파일 존재 여부 확인 후 삭제)
         for image in instance.images.all():
-            if image.image:  # 이미지 파일이 있는 경우
-                image.image.storage.delete(image.image.name)  # 물리적 파일 삭제
+            if image.image and os.path.exists(image.image.path):
+                image.image.delete()  # 실제 파일 삭제
             image.delete()  # DB 레코드 삭제
 
-        # ✅ 폴더 삭제 (비어 있다면)
-        if folder_path and os.path.isdir(folder_path):
-            shutil.rmtree(folder_path)  # 폴더 삭제
-
-        if instance.author != request.user:
-            return Response({"error": "게시물을 삭제할 권한이 없습니다."}, status=403)
-
+        # ✅ 게시물 삭제
         instance.delete()
-        return Response(status=204)
+
+        return Response({"message": "게시물이 삭제되었습니다."}, status=status.HTTP_200_OK)  # 200 반환
 
 class DraftPostListView(ListAPIView):
     """

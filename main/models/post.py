@@ -44,43 +44,32 @@ class Post(models.Model):
     ]
 
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # ✅ CustomUser 참조
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="posts"
     )
     category = models.ForeignKey(
         Category,
-        on_delete=models.SET_DEFAULT,  # ✅ 삭제 시 기본값으로 변경
-        default=1,  # ✅ 기본 카테고리를 '게시판'으로 설정 (없으면 자동 생성)
+        on_delete=models.SET_DEFAULT,
+        default=1,
         related_name="posts"
     )
     subject = models.CharField(max_length=50, choices=SUBJECT_CHOICES, default="주제 선택 안 함")
-    keyword = models.CharField(max_length=50, choices=KEYWORD_CHOICES, default="default")  # ✅ 자동 분류 필드
+    keyword = models.CharField(max_length=50, choices=KEYWORD_CHOICES, default="default")
     title = models.CharField(max_length=100)
-    content = models.TextField(blank=True, null=True)  # ✅ HTML 전체 저장
-    status = models.CharField(
-        max_length=10,
-        choices=POST_CHOICES,
-        default='draft'
-    )
-    visibility = models.CharField(
-        max_length=10,
-        choices=VISIBILITY_CHOICES,
-        default='everyone',
-        verbose_name="공개 범위"
-    )
-    like_count = models.PositiveIntegerField(default=0)  # 하트 개수 저장
-    comment_count = models.PositiveIntegerField(default=0)  # 댓글 개수 저장
+    content = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=10, choices=POST_CHOICES, default='draft')
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='everyone')
+    like_count = models.PositiveIntegerField(default=0)
+    comment_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    is_read = models.BooleanField(default=False)  # 읽음 상태 필드 추가
+    is_read = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
-        """ ✅ 기본 카테고리 자동 설정 (없으면 '게시판'으로) """
         if not self.category or not Category.objects.filter(id=self.category.id).exists():
             self.category, _ = Category.objects.get_or_create(id=1, name="게시판")
 
-        """ ✅ subject 값에 따라 keyword 자동 설정 """
         keyword_mapping = {
             "엔터테인먼트/예술": ["문학·책", "영화", "미술·디자인", "공연·전시", "음악", "드라마", "스타·연예인", "만화·애니", "방송"],
             "생활/노하우/쇼핑": ["일상·생각", "육아·결혼", "반려동물", "좋은글·이미지", "패션·미용", "인테리어/DIY", "요리·레시피", "상품리뷰", "원예/재배"],
@@ -91,6 +80,14 @@ class Post(models.Model):
         self.keyword = next((key for key, values in keyword_mapping.items() if self.subject in values), "default")
         super().save(*args, **kwargs)
 
+    @property
+    def absolute_url(self):
+        """
+        ✅ 게시물의 절대 URL 반환
+        """
+        site_url = getattr(settings, "SITE_URL", "http://127.0.0.1:8000")
+        return f"{site_url}/posts/{self.id}/"
+
     def __str__(self):
         return f"{self.category} / {self.title} / {dict(self.VISIBILITY_CHOICES).get(self.visibility)}"
 
@@ -100,10 +97,17 @@ class PostImage(models.Model):
     ✅ 게시물에 포함된 이미지 저장 모델
     """
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to=image_upload_path)  # ✅ UUID 기반 경로 적용
-    image_url = models.URLField(blank=True, null=True)  # ✅ HTML 본문 내 이미지 URL
+    image = models.ImageField(upload_to=image_upload_path)
     caption = models.CharField(max_length=255, blank=True, null=True)
-    is_representative = models.BooleanField(default=False, verbose_name="대표 사진 여부")
+    is_representative = models.BooleanField(default=False)
+
+    @property
+    def absolute_url(self):
+        """
+        ✅ 절대 URL을 반환하는 속성
+        """
+        site_url = getattr(settings, "SITE_URL", "http://127.0.0.1:8000")
+        return f"{site_url}{self.image.url}" if self.image else ""
 
     def save(self, *args, **kwargs):
         """
@@ -112,9 +116,6 @@ class PostImage(models.Model):
         if not self.post.id:
             self.post.save()  # ✅ post.id가 없으면 먼저 저장
         super().save(*args, **kwargs)
-        if not self.image_url and self.image:
-            self.image_url = self.image.url  # ✅ 경로에 맞춰 URL 자동 반영
-            super().save(update_fields=["image_url"])
 
     def __str__(self):
         return f"Image for {self.post.title} (Representative: {self.is_representative})"

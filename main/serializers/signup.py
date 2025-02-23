@@ -19,7 +19,7 @@ class SignupSerializer(serializers.ModelSerializer):
         """ID 중복 여부 및 비밀번호 확인 검증"""
         errors = {}
 
-        # 아이디 유효성 검사 (5~20자, 영문 소문자, 숫자, 특수문자(-, _))
+        #아이디 유효성 검사 (5~20자, 영문 소문자, 숫자, 특수문자(-, _))
         #username_regex = r'^[a-z0-9_-]{5,20}$'
         #if not re.match(username_regex, data['id']):
             #errors["id"] = "아이디는 5~20자, 영문 소문자, 숫자, 특수문자(_), (-)만 사용할 수 있습니다."
