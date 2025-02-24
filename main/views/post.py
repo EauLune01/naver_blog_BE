@@ -446,6 +446,8 @@ class PostDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        urlname = self.request.query_params.get('urlname', None)
+        pk = self.kwargs.get('pk')  # ✅ pk는 URL 경로에서 받음
 
         # ✅ 서로이웃 ID 리스트 가져오기
         from_neighbors = list(
@@ -466,15 +468,35 @@ class PostDetailView(RetrieveAPIView):
             (public_posts | mutual_neighbor_posts) & Q(status="published")
         ).exclude(user=user)  # ❌ 본인 게시물 제외
 
+        # ✅ 특정 사용자의 게시물 조회 (`urlname`이 주어진 경우)
+        if urlname:
+            profile = Profile.objects.filter(urlname=urlname).select_related("user").first()
+            if not profile:
+                return Post.objects.none()  # 존재하지 않는 경우 빈 쿼리셋 반환
+            queryset = queryset.filter(user=profile.user)
+
+        # ✅ 특정 pk 필터링
+        queryset = queryset.filter(pk=pk)
+
         return queryset
 
     @swagger_auto_schema(
         operation_summary="게시물 상세 조회",
         operation_description="특정 게시물의 텍스트와 이미지를 포함한 상세 정보를 조회합니다. PUT, PATCH, DELETE 요청은 허용되지 않습니다.",
+        manual_parameters=[
+            openapi.Parameter(
+                'urlname', openapi.IN_QUERY,
+                description="조회할 사용자의 URL 이름",
+                required=False,
+                type=openapi.TYPE_STRING
+            ),
+        ],
         responses={200: PostSerializer()},
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+
 
 class PostManageView(UpdateAPIView, DestroyAPIView):
     permission_classes = [IsAuthenticated]
@@ -634,7 +656,7 @@ class PostMyCurrentView(ListAPIView):
 
 class PostPublicCurrentView(ListAPIView):
     """
-    ✅ 특정 사용자의 최신 5개 게시물을 조회하는 API (서로이웃 여부 고려)
+    ✅ 특정 사용자의 최신 5개(최대 5개) 게시물을 조회하는 API (서로이웃 여부 고려)
     """
     permission_classes = [AllowAny]  # ✅ 비로그인 사용자도 조회 가능
     serializer_class = PostSerializer

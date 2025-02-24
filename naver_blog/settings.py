@@ -193,6 +193,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",  # Live Server (프론트엔드 실행 주소)
 ]
 
+# 🔥 인증 정보 포함한 요청 허용 (중요)
+CORS_ALLOW_CREDENTIALS = True
+
+
 # 모든 도메인 허용 (개발용)
 #CORS_ALLOW_ALL_ORIGINS = True
 

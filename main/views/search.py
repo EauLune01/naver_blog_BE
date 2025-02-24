@@ -235,10 +235,6 @@ class GlobalNickAndIdSearchView(APIView):
 class GlobalPostSearchView(APIView):
     """
     전체 블로그에서 게시글을 검색하는 API
-    - 게시글 제목, 본문, 이미지 캡션에서 검색
-    - 같은 게시물이 중복으로 반환되지 않도록 처리
-    - 전체 공개(visibility='everyone') 게시글만 포함
-    - 검색된 키워드 주변 텍스트를 포함한 미리보기(excerpt) 제공
     """
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -246,8 +242,7 @@ class GlobalPostSearchView(APIView):
         operation_summary="블로그 글 검색 (전체)",
         operation_description="전체 블로그에서 게시글을 검색합니다.",
         manual_parameters=[
-            openapi.Parameter('q', openapi.IN_QUERY, description="검색할 키워드", type=openapi.TYPE_STRING,
-                              required=True),
+            openapi.Parameter('q', openapi.IN_QUERY, description="검색할 키워드", type=openapi.TYPE_STRING, required=True),
         ],
         responses={200: openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -266,49 +261,47 @@ class GlobalPostSearchView(APIView):
             return Response({"error": "검색어는 2글자 이상 입력해주세요."}, status=400)
 
         matched_post_ids = set()
-        excerpts = {}  # 🔹 post_id 별 excerpt 저장
+        excerpts = {}  # 🔹 post_id 별 excerpt 저장 (제목, 본문, 캡션 포함)
 
-        # 🔹 1. 제목에서 검색 (중복 방지 & 전체 공개 필터링)
+        # 🔹 1. 제목에서 검색
         title_matches = Post.objects.filter(
             Q(title__icontains=search_keyword) & Q(visibility='everyone')
         )
-        matched_post_ids.update(title_matches.values_list('id', flat=True))
+        for post in title_matches:
+            matched_post_ids.add(post.id)
+            excerpts[post.id] = get_excerpt(post.title, search_keyword)  # 🔹 제목에서 검색된 경우
 
-        # 🔹 2. 본문에서 검색 (중복 방지 & 전체 공개 필터링)
+        # 🔹 2. 본문에서 검색 (제목에서 검색되지 않은 경우에만 추가)
         content_matches = Post.objects.filter(
             Q(content__icontains=search_keyword) & Q(visibility='everyone')
         )
-
         for post in content_matches:
-            post_id = post.id
-            matched_post_ids.add(post_id)
-            if post_id not in excerpts:
-                excerpts[post_id] = get_excerpt(post.content, search_keyword)  # ✅ 기존 함수 사용
+            if post.id not in excerpts:  # 🔹 제목에서 검색되지 않은 경우에만 본문 사용
+                excerpts[post.id] = get_excerpt(post.content, search_keyword)
+            matched_post_ids.add(post.id)
 
-        # 🔹 3. 이미지 캡션에서 검색 (중복 방지 & 전체 공개 필터링)
+        # 🔹 3. 이미지 캡션에서 검색 (제목과 본문에서 검색되지 않은 경우에만 추가)
         caption_matches = PostImage.objects.filter(
             Q(caption__icontains=search_keyword) & Q(post__visibility='everyone')
         ).select_related('post')
-
         for image in caption_matches:
-            post_id = image.post.id
-            matched_post_ids.add(post_id)
-            if post_id not in excerpts:
-                excerpts[post_id] = get_excerpt(image.caption, search_keyword)  # ✅ 기존 함수 사용
+            if image.post.id not in excerpts:  # 🔹 제목과 본문에서 검색되지 않은 경우
+                excerpts[image.post.id] = get_excerpt(image.caption, search_keyword)
+            matched_post_ids.add(image.post.id)
 
-        # 🔹 4. 검색된 게시물 조회 (중복 제거됨)
+        # 🔹 4. 검색된 게시물 조회
         posts = Post.objects.filter(id__in=matched_post_ids).select_related('user__profile')
 
         results = []
         for post in posts:
-            profile = post.user.profile  # 변경된 부분: `post.author.profile` -> `post.user.profile`
+            profile = post.user.profile
             results.append({
                 "title": post.title,
-                "username": post.user.profile.username,  # 변경된 부분: `post.author.username` -> `post.user.username`
-                "blog_name": profile.blog_name,  # 변경된 부분: `post.author.profile.blog_name` -> `post.user.profile.blog_name`
+                "username": profile.username,  # ✅ 작성자 추가
                 "created_at": post.created_at.strftime("%Y-%m-%d %H:%M"),
-                "excerpt": excerpts.get(post.id, post.title)  # 🔹 기본값: 제목
+                "thumbnail": post.images.filter(is_representative=True).first().image.url if post.images.exists() else None,
+                "excerpt": excerpts.get(post.id, post.content),  # ✅ 제목, 본문, 캡션 중 하나에서 추출된 excerpt 사용
+                "visibility": post.visibility  # ✅ visibility 추가
             })
 
         return Response({"posts": results})
-

@@ -27,12 +27,11 @@ class PostSearchSerializer(serializers.ModelSerializer):
         if not search_keyword:
             return ""
 
-        # 본문 검색
-        for text in obj.texts.all():
-            if search_keyword.lower() in text.content.lower():
-                return self.extract_excerpt(text.content, search_keyword)
+        # 🔹 본문 검색 (Post 모델의 `content` 필드 사용)
+        if obj.content and search_keyword.lower() in obj.content.lower():
+            return self.extract_excerpt(obj.content, search_keyword)
 
-        # 이미지 설명 검색 (본문에서 검색어를 찾지 못한 경우)
+        # 🔹 이미지 설명 검색 (본문에서 검색어를 찾지 못한 경우)
         for image in obj.images.all():
             if image.caption and search_keyword.lower() in image.caption.lower():
                 return self.extract_excerpt(image.caption, search_keyword)
