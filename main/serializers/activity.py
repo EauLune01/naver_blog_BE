@@ -11,6 +11,8 @@ class ActivitySerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
     is_read = serializers.BooleanField()  # ✅ 이제 바로 사용 가능!
     is_parent = serializers.SerializerMethodField()
+    post_id = serializers.IntegerField(read_only=True)  # ✅ post의 id 추가
+    post_urlname = serializers.CharField(read_only=True)  # ✅ post의 urlname 추가
 
     def get_activity_id(self, obj):
         if isinstance(obj, Heart):
@@ -27,16 +29,24 @@ class ActivitySerializer(serializers.Serializer):
     def to_representation(self, instance):
         username = None
         content = None
+        post_id = None
+        post_urlname = None
 
         if isinstance(instance, Comment):
             username = instance.author.username
             content = instance.content
+            post_id = instance.post.id
+            post_urlname = instance.post.user.profile.urlname  # ✅ post의 urlname
         elif isinstance(instance, Heart):
             username = instance.user.profile.username
             content = f"{instance.post.title} 글을 좋아합니다."
+            post_id = instance.post.id
+            post_urlname = instance.post.user.profile.urlname  # ✅ post의 urlname
         elif isinstance(instance, CommentHeart):
             username = instance.user.profile.username
             content = f"{instance.comment.content} 댓글을 좋아합니다."
+            post_id = instance.comment.post.id
+            post_urlname = instance.comment.post.user.profile.urlname  # ✅ post의 urlname
 
         return {
             "activity_id": self.get_activity_id(instance),
@@ -46,6 +56,7 @@ class ActivitySerializer(serializers.Serializer):
             "content": content,
             "created_at": instance.created_at,
             "is_read": instance.is_read,  # ✅ 이제 그대로 사용 가능!
-            "is_parent": self.get_is_parent(instance)
+            "is_parent": self.get_is_parent(instance),
+            "post_id": post_id,
+            "post_urlname": post_urlname,
         }
-
