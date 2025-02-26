@@ -269,14 +269,14 @@ class GlobalPostSearchView(APIView):
         )
         for post in title_matches:
             matched_post_ids.add(post.id)
-            excerpts[post.id] = get_excerpt(post.title, search_keyword)  # 🔹 제목에서 검색된 경우
+            excerpts[post.id] = get_excerpt(post.title, search_keyword)
 
         # 🔹 2. 본문에서 검색 (제목에서 검색되지 않은 경우에만 추가)
         content_matches = Post.objects.filter(
             Q(content__icontains=search_keyword) & Q(visibility='everyone')
         )
         for post in content_matches:
-            if post.id not in excerpts:  # 🔹 제목에서 검색되지 않은 경우에만 본문 사용
+            if post.id not in excerpts:
                 excerpts[post.id] = get_excerpt(post.content, search_keyword)
             matched_post_ids.add(post.id)
 
@@ -285,7 +285,7 @@ class GlobalPostSearchView(APIView):
             Q(caption__icontains=search_keyword) & Q(post__visibility='everyone')
         ).select_related('post')
         for image in caption_matches:
-            if image.post.id not in excerpts:  # 🔹 제목과 본문에서 검색되지 않은 경우
+            if image.post.id not in excerpts:
                 excerpts[image.post.id] = get_excerpt(image.caption, search_keyword)
             matched_post_ids.add(image.post.id)
 
@@ -296,12 +296,15 @@ class GlobalPostSearchView(APIView):
         for post in posts:
             profile = post.user.profile
             results.append({
+                "post_id": post.id,  # ✅ 추가된 post_id
                 "title": post.title,
-                "username": profile.username,  # ✅ 작성자 추가
+                "username": profile.username,
+                "urlname": profile.urlname,
                 "created_at": post.created_at.strftime("%Y-%m-%d %H:%M"),
                 "thumbnail": post.images.filter(is_representative=True).first().image.url if post.images.exists() else None,
-                "excerpt": excerpts.get(post.id, post.content),  # ✅ 제목, 본문, 캡션 중 하나에서 추출된 excerpt 사용
-                "visibility": post.visibility  # ✅ visibility 추가
+                "excerpt": excerpts.get(post.id, post.content),
+                "visibility": post.visibility
             })
 
         return Response({"posts": results})
+
