@@ -31,12 +31,13 @@ class MyNewsListView(ListAPIView):
         # ✅ 내가 작성한 게시글에 달린 좋아요 (post__user → 내가 작성한 게시글)
         post_like_news = list(Heart.objects.filter(
             post__user=user, is_read=False
-        ).select_related('post', 'user')
+        ).exclude(user=profile.user)  # ✅ 내가 누른 좋아요는 제외, profile.user로 수정
+        .select_related('post', 'user')
         .order_by('-created_at'))
 
         # ✅ 내가 작성한 댓글에 달린 대댓글 (parent__author → 내가 쓴 댓글에 대한 대댓글)
         comment_reply_news = list(Comment.objects.filter(
-            parent__author=user.profile, is_read=False
+            parent__author=profile, is_read=False
         ).exclude(author=profile)  # ✅ 내가 작성한 대댓글은 제외
         .select_related('post', 'author')
         .order_by('-created_at'))
@@ -49,3 +50,4 @@ class MyNewsListView(ListAPIView):
         )[:5]
 
         return combined_news
+
